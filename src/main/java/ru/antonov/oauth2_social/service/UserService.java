@@ -1,9 +1,9 @@
 package ru.antonov.oauth2_social.service;
 
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import ru.antonov.oauth2_social.entity.UserEntity;
-import ru.antonov.oauth2_social.exception.UserNotFoundException;
 import ru.antonov.oauth2_social.repository.UserRepository;
 
 @Service
@@ -17,7 +17,7 @@ public class UserService {
 
     public UserEntity findUserByEmail(String email){
         return userRepository.findByEmail(email).orElseThrow(
-                () -> new UserNotFoundException(String.format("Пользователь с %s email не найден", email))
+                () -> new EntityNotFoundException(String.format("Пользователь с %s email не найден", email))
         );
     }
 }

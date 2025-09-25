@@ -7,6 +7,7 @@ import io.jsonwebtoken.security.Keys;
 
 import lombok.RequiredArgsConstructor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -14,7 +15,6 @@ import java.util.*;
 import java.util.function.Function;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import org.springframework.transaction.annotation.Transactional;
 import ru.antonov.oauth2_social.dto.AuthResponseDto;
 import ru.antonov.oauth2_social.dto.TokenRequestDto;
 import ru.antonov.oauth2_social.dto.TokenValidationCheckResponse;
@@ -22,11 +22,12 @@ import ru.antonov.oauth2_social.entity.TokenEntity;
 import ru.antonov.oauth2_social.entity.TokenMode;
 import ru.antonov.oauth2_social.entity.TokenType;
 import ru.antonov.oauth2_social.entity.UserEntity;
-import ru.antonov.oauth2_social.exception.TokenConfigurationException;
+import ru.antonov.oauth2_social.validation.TokenConfigurationException;
 import ru.antonov.oauth2_social.repository.TokenRepository;
 
 import javax.crypto.SecretKey;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TokenService {
@@ -36,8 +37,14 @@ public class TokenService {
     private Long userAccessTokenExpiration;
     @Value("${application.jwt.user-refresh-token-expiration}")
     private Long userRefreshTokenExpiration;
+    @Value("${application.jwt.user-email-confirmation-token-expiration}")
+    private Long userEmailConfirmationTokenExpiration;
+    @Value("${application.jwt.user-course-join-confirmation-token-expiration}")
+    private Long userCourseJoinConfirmationTokenExpiration;
     @Value("${application.name}")
     private String issuer;
+    @Value("${application.jwt.inner-services-token}")
+    private String serviceToken;
 
     private final TokenRepository tokenRepository;
     private final UserService userService;
@@ -64,13 +71,18 @@ public class TokenService {
         else if(tokenMode.equals(TokenMode.REFRESH)){
             expiration = userRefreshTokenExpiration;
         }
+        else if(tokenMode.equals(TokenMode.EMAIL_CONFIRMATION)){
+            expiration = userEmailConfirmationTokenExpiration;
+        }
+        else if(tokenMode.equals(TokenMode.COURSE_JOIN_CONFIRMATION)){
+            expiration = userCourseJoinConfirmationTokenExpiration;
+        }
 
         return buildToken(
                 extraClaims,
                 email,
                 expiration);
     }
-
 
     private String buildToken(
             Map<String, Object> extraClaims,
@@ -123,47 +135,70 @@ public class TokenService {
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public TokenValidationCheckResponse isTokenValid(TokenRequestDto tokenRequestDto){
-        String token = tokenRequestDto.getToken();
+    public boolean validateToken(String token, TokenMode tokenMode) {
+        // Если токен принадлежит внутреннему сервису, то он валиден
+        if(Objects.equals(token, serviceToken)){
+            return true;
+        }
 
-        boolean isValid = isTokenValid(token);
+        boolean isValid = false;
 
+        // Проверка полей is_revoked и is_expired токена в БД
         Boolean isNotRevokedAndNotExpired = tokenRepository
                 .findByToken(token)
-                .filter(t -> t.getTokenMode().equals(TokenMode.ACCESS))
+                .filter(t -> t.getTokenMode().equals(tokenMode))
                 .map(t -> !t.isRevoked() && !t.isExpired())
                 .orElse(false);
 
+        // Проверка срока действия токена
+        // Если токен оказывается просроченным, метод isTokenValid() выбрасывает исключение,
+        try{ isValid = isTokenValid(token); } catch (TokenConfigurationException ex){}
+
+        // Возвращение результата. TRUE - токен валиден, FALSE - токен невалиден
+        return isValid && Boolean.TRUE.equals(isNotRevokedAndNotExpired);
+    }
+
+    public TokenValidationCheckResponse isTokenValid(TokenRequestDto tokenRequestDto){
         return TokenValidationCheckResponse
                 .builder()
-                .isValid( isValid && Boolean.TRUE.equals(isNotRevokedAndNotExpired) )
+                .isValid(
+                        validateToken(tokenRequestDto.getToken(), tokenRequestDto.getTokenMode())
+                )
                 .build();
     }
 
     public AuthResponseDto refreshAccessToken(TokenRequestDto tokenRequestDto){
         String refresh = tokenRequestDto.getToken();
+
+        // Проверка на то, является ли refresh-токен валидным
         boolean isRefreshTokenValid = isTokenValid(refresh) &&
                 tokenRepository.findByToken(refresh)
                         .filter(t -> t.getTokenMode().equals(TokenMode.REFRESH))
                         .map(t -> !t.isRevoked() && !t.isExpired())
                         .orElse(false);
 
-        if(!isRefreshTokenValid){
+        if(!isRefreshTokenValid){;
             throw new TokenConfigurationException("Токен истек или отозван");
         }
 
+        // Извлечение email'а и ролей пользователя из токена
         String userEmail = extractUsername(refresh);
         List<String> roles = extractRoles(refresh);
 
+        // Необходимо отозвать раннее выданные этому пользователю токены
         revokeAllUserTokens(userEmail);
+
+        // Генерация новой пары токенов
         String accessToken = generateUserToken(roles, userEmail, TokenMode.ACCESS);
         String refreshToken = generateUserToken(roles, userEmail, TokenMode.REFRESH);
 
         UserEntity user = userService.findUserByEmail(userEmail);
 
+        // Сохранение токенов в БД
         saveToken(accessToken, TokenType.BEARER, TokenMode.ACCESS,  user);
         saveToken(refreshToken, TokenType.BEARER, TokenMode.REFRESH, user);
 
+        // Возвращение ответа с новой парой токенов
         return AuthResponseDto
                 .builder()
                 .accessToken(accessToken)
@@ -176,6 +211,12 @@ public class TokenService {
     }
 
     public int revokeAllUserTokens(String email){
-        return tokenRepository.revokeAllTokensByUserEmail(email);
+        return tokenRepository.revokeAccessAndRefreshTokensByUserEmail(email);
     }
+
+    public int revokeAllTokensByEmailAndTokenMode(String email, TokenMode tokenMode){
+        int res = tokenRepository.revokeAllByEmailAndTokenMode(email, tokenMode);
+        return res;
+    }
+
 }

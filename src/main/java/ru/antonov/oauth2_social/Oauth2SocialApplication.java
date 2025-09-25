@@ -9,5 +9,4 @@ public class Oauth2SocialApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(Oauth2SocialApplication.class, args);
 	}
-
 }

@@ -3,6 +3,7 @@ package ru.antonov.oauth2_social.service;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -15,9 +16,10 @@ import ru.antonov.oauth2_social.dto.AuthResponseDto;
 import ru.antonov.oauth2_social.entity.TokenMode;
 import ru.antonov.oauth2_social.entity.TokenType;
 import ru.antonov.oauth2_social.entity.UserEntity;
-import ru.antonov.oauth2_social.exception.ClientNotFoundException;
-import ru.antonov.oauth2_social.exception.UnauthorizedException;
-
+import ru.antonov.oauth2_social.validation.AccountInactiveEx;
+import ru.antonov.oauth2_social.validation.ClientNotFoundException;
+import ru.antonov.oauth2_social.validation.InvalidStateException;
+import ru.antonov.oauth2_social.validation.OAuth2AuthorizationException;
 
 import java.util.List;
 import java.util.Map;
@@ -25,6 +27,7 @@ import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
     private final ClientRegistrationRepository clientRegistrationRepository;
     private final TokenService jwtService;
@@ -51,20 +54,35 @@ public class AuthService {
     }
 
     public AuthResponseDto makeAuth(String code, ClientRegistration client) {
+        // Обмен authorization_code, полученного на внешнем сервисе аутентификации, на access_token
         String token = getOauth2AccessToken(code, client);
+        // Получение email'а пользователя по access token'у
         String userEmail = getUserEmail(
                 client.getRegistrationId(), client.getProviderDetails().getUserInfoEndpoint().getUri(), token
         );
 
         UserEntity user = userService.findUserByEmail(userEmail);
+        if(!user.isEnabled()){
+            String msg = String.format(
+                    "Аккаунт с %s email не активирован. Необходимо подтвердить адрес электронной почты",
+                    user.getEmail()
+            );
+            log.error("Авторизация не пройдена: {}", msg);
+            throw new AccountInactiveEx(msg);
+        }
+
+        // Генерация access и refresh token'ов
         String accessToken = jwtService.generateUserToken(List.of(user.getRole()), user.getEmail(), TokenMode.ACCESS);
         String refreshToken = jwtService.generateUserToken(List.of(user.getRole()), user.getEmail(), TokenMode.REFRESH);
 
+        // Ранее выданные токены теперь не действительны
         int amount_revoked_tokens = tokenService.revokeAllUserTokens(user.getEmail());
 
+        // сохранение токенов в БД
         tokenService.saveToken(accessToken, TokenType.BEARER, TokenMode.ACCESS, user);
         tokenService.saveToken(refreshToken, TokenType.BEARER, TokenMode.REFRESH, user);
 
+        log.error("Авторизация пройдена успешно: {}", userEmail);
         return AuthResponseDto
                 .builder()
                 .accessToken(accessToken)
@@ -100,7 +118,7 @@ public class AuthService {
             return (String) responseBody.get("access_token");
         }
 
-        throw new UnauthorizedException(String.format("Ошибка при аутентификации через клиент %s", client));
+        throw new OAuth2AuthorizationException(String.format("Ошибка при аутентификации через клиент %s", client));
     }
 
     private String getUserEmail(String registrationId, String userInfoUri, String token) {
@@ -119,7 +137,7 @@ public class AuthService {
         } else if (responseBody != null && registrationId.equals("yandex") && responseBody.get("default_email") != null) {
             return (String) responseBody.get("default_email");
         } else {
-            throw new UnauthorizedException(String.format("Ошибка при авторизации с %s", registrationId));
+            throw new OAuth2AuthorizationException(String.format("Ошибка при авторизации с %s", registrationId));
         }
     }
 
@@ -127,7 +145,7 @@ public class AuthService {
         String savedState = (String) request.getSession().getAttribute("oauth2State");
 
         if (!Objects.equals(savedState, state)) {
-            throw new UnauthorizedException("Параметр запроса state был изменен!");
+            throw new InvalidStateException("Параметр запроса state был изменен!");
         }
 
         return makeAuth(code, client);

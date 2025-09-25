@@ -1,10 +1,9 @@
-package ru.antonov.oauth2_social.exception;
+package ru.antonov.oauth2_social.validation;
 
-
-import lombok.*;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.http.HttpStatus;
-
-import java.util.List;
 
 @Getter
 @Setter
@@ -12,5 +11,5 @@ import java.util.List;
 public class ApiError {
     private HttpStatus status;
     private String message;
-    private List<String> errors;
+    private String error;
 }

@@ -6,7 +6,7 @@ spring:
           google:
             client-id: 811322847826-p10qeqvvjhlo4h7c3g76g14lfcfsh3pr.apps.googleusercontent.com
             client-secret: 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
-            redirect-uri: http://localhost:8080/auth-service/api/v1/auth/callback/google
+            redirect-uri: http://localhost:8080/api/v1/auth/callback/google
           yandex:
             client-id: 4020b6ce688640b3a40b996a54a70286
             client-secret: 2f3fbbe782b54d8390338d5d311cf391
@@ -14,7 +14,7 @@ spring:
             authorization-grant-type: authorization_code
             registration-id: yandex
             scope: login:email, login:info
-            redirect-uri: http://localhost:8080/auth-service/api/v1/auth/callback/yandex
+            redirect-uri: http://localhost:8080/api/v1/auth/callback/yandex
             client-name: Yandex
         provider:
           yandex:
@@ -35,16 +35,27 @@ spring:
        dialect: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
 
-application:
-  name: auth-service
-  jwt:
-    secret-key: AF958BBA8392CF55F31277A95F8082086B5094B6422D171402478DAB3A86FA0E
-    user-access-token-expiration: 3600000  # 1 час
-    user-refresh-token-expiration: 518400000 # 6 дней
+  application:
+    name: logos-lms-service
+    secret: 5bce874940fd82b367610fcf82bdd85e3a3d36959b4b65b273e5e2a60663f718
+    jwt:
+      secret-key: AF958BBA8392CF55F31277A95F8082086B5094B6422D171402478DAB3A86FA0E
+      user-access-token-expiration: 3600000  # 1 час
+      user-refresh-token-expiration: 518400000 # 6 дней
+      account-activation-token-expiration: 86400000 # 1 день
+      user-course-join-confirmation-token-expiration: 604800000 # 7 дней
+      reset-2fa-token-expiration: 900000 # 15 минут
+      reset-password-token-expiration: 900000 # 15 минут
+      inner-services-token:  eyJhbGciOiJIUzI1NiJ9.eyJyb2xlcyI6WyJTRVJWSUNFIl0sInN1YiI6ImlubmVyX3NlcnZpY2VAbXkuc2VydmljZSIsImlhdCI6MTc0ODUxNDQ2NSwiaXNzIjoiYXV0aC1zZXJ2aWNlIiwiZXhwIjoxNzgwMDUwNDY1fQ.sPPwcMq-5pqH48Mj3oxM9lv6eLMdiEgUDNq6HEk8sN4
+    url:
+      reset-password: http://localhost:8081/front/logos-lms/api/v1/auth/reset-password
+      reset-2fa: http://localhost:8081/front/logos-lms/api/v1/auth/reset-2fa
+      activate-account: http://localhost:8080/logos-lms/api/v1/users/activate-account
+    sender-email: yvgnantnv@yandex.ru
 
 server:
   port: 8080
   servlet:
-    context-path: /auth-service/api/v1
+    context-path: /logos-lms/api/v1

@@ -99,7 +99,7 @@ public class GroupController {
         if(principal.getInstitution() == null){
             throw new AccessDeniedEx(
                     "Ошибка. Вы не привязаны к учебному заведению",
-                    String.format("Отказ в доступе при добавлении списка пользователей. Пользователь %s не привязан к учебному заведению",
+                    String.format("Отказ в доступе при добавлении списка групп. Пользователь %s не привязан к учебному заведению",
                             principal.getEmail())
             );
         }

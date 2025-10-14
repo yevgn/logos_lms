@@ -53,6 +53,7 @@ spring:
       reset-password: http://localhost:8081/front/logos-lms/api/v1/auth/reset-password
       reset-2fa: http://localhost:8081/front/logos-lms/api/v1/auth/reset-2fa
       activate-account: http://localhost:8080/logos-lms/api/v1/users/activate-account
+      get-course-info: front-url
     sender-email: yvgnantnv@yandex.ru
 
 server:

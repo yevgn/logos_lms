@@ -1,14 +1,11 @@
 package ru.antonov.oauth2_social.exception;
 
-import jakarta.mail.MessagingException;
-
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.mail.MailAuthenticationException;
-import org.springframework.mail.MailSendException;
+
 
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -109,17 +106,6 @@ public class CustomExceptionHandler{
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    @ExceptionHandler(AccessDeniedEx.class)
-    public ResponseEntity<ApiError> handleAccessDeniedEx(AccessDeniedEx ex){
-        log.warn(ex.getDebugMessage());
-        ApiError error = ApiError
-                .builder()
-                .status(HttpStatus.FORBIDDEN)
-                .error(ex.getMessage())
-                .build();
-        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
-    }
-
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgumentEx(IllegalArgumentException ex){
         log.error(ex.getMessage());
@@ -130,6 +116,8 @@ public class CustomExceptionHandler{
                 .build();
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
+
+
 
 //    @ExceptionHandler(MailAuthenticationException.class)
 //    public ResponseEntity<ApiError> handleMailAuthenticationEx(MailAuthenticationException ex){

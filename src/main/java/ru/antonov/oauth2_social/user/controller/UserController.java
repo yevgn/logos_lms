@@ -238,6 +238,39 @@ public class UserController {
         );
     }
 
+    @GetMapping("/course")
+    public ResponseEntity<List<UserShortResponseDto>> findUsersByCourseId(
+            @AuthenticationPrincipal User principal,
+            @RequestParam("course_id") UUID courseId
+    ) {
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
+
+        List<User> users = userService.findAllByCourseId(courseId);
+
+        return ResponseEntity.ok(
+                users.stream()
+                        .map(DtoFactory::makeUserShortResponseDto)
+                        .toList()
+        );
+    }
+
+    @GetMapping("/course/not")
+    public ResponseEntity<List<UserShortResponseDto>> findUsersByCourseIdNot(
+            @AuthenticationPrincipal User principal,
+            @RequestParam("institution_id") UUID institutionId,
+            @RequestParam("course_id") UUID courseId
+    ) {
+        checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
+
+        List<User> users = userService.findAllByInstitutionIdNotInCourse(institutionId, courseId);
+
+        return ResponseEntity.ok(
+                users.stream()
+                        .map(DtoFactory::makeUserShortResponseDto)
+                        .toList()
+        );
+    }
+
     @GetMapping("/institution")
     public ResponseEntity<List<UserShortResponseDto>> findUsersByInstitutionId(
             @AuthenticationPrincipal User principal,
@@ -347,7 +380,8 @@ public class UserController {
         }
 
         if (!accessManager.isUserHasAccessToOther(user, other, isNeedToHaveHigherPriority, isNeedToBeInOneInstitute)) {
-            throw new AccessDeniedException(
+            throw new AccessDeniedEx(
+                    "Ошибка доступа. Вы не имеете доступа к этому пользователю",
                     String.format("Пользователю %s не разрешен доступ к пользователю %s", user.getEmail(), other.getEmail())
             );
         }
@@ -355,8 +389,20 @@ public class UserController {
 
     private void checkUserHasAccessToInstitutionOrElseThrow(User user, UUID institutionId) {
         if (!accessManager.isUserHasAccessToInstitution(user, institutionId)) {
-            throw new AccessDeniedException(
-                    String.format("Пользователю %s не разрешен доступ к институту %s", user.getEmail(), institutionId)
+            throw new AccessDeniedEx(
+                    "Ошибка доступа. Вы не имеете доступа к этому учебному заведению.",
+                    String.format("Пользователю %s не разрешен доступ к учебному заведению %s", user.getEmail(), institutionId)
+            );
+        }
+    }
+
+    private void checkPrincipalHasAccessToCourseOrElseThrow(
+            User principal, UUID courseId, boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent){
+        if(!accessManager.isUserHasAccessToCourse(principal, courseId, isNeedToBeCreator, isNeedToHaveHigherRoleThanStudent)){
+            throw new AccessDeniedEx(
+                    String.format("Ошибка доступа. У вас нет доступа к курсу %s.", courseId),
+                    String.format("Отказ в доступе к курсу. Пользователь %s не имеет доступа к курсу %s",
+                            principal.getEmail(), courseId)
             );
         }
     }

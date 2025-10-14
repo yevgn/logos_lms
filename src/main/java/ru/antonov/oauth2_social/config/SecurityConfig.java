@@ -130,6 +130,15 @@ public class SecurityConfig {
                                 .requestMatchers(HttpMethod.DELETE,"/groups/id")
                                 .hasAnyRole(Role.ADMIN.name())
 
+                                .requestMatchers(HttpMethod.POST, "/courses/user-id-list")
+                                .hasRole(Role.TUTOR.name())
+                                .requestMatchers(HttpMethod.POST, "/courses/group-id-list")
+                                .hasRole(Role.TUTOR.name())
+                                .requestMatchers(HttpMethod.POST, "/courses/*/add-users/user-id-list")
+                                .hasRole(Role.TUTOR.name())
+                                .requestMatchers(HttpMethod.POST, "/courses/*/add-users/group-id-list")
+                                .hasRole(Role.TUTOR.name())
+
                                 .requestMatchers(WHITE_LIST_URL)
                                 .permitAll()
 

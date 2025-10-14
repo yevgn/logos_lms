@@ -6,10 +6,14 @@ import lombok.*;
 import org.hibernate.proxy.HibernateProxy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import ru.antonov.oauth2_social.course.entity.CourseUser;
+import ru.antonov.oauth2_social.course.entity.Solution;
+import ru.antonov.oauth2_social.course.entity.Task;
 
 import java.util.Collection;
 
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Getter
@@ -41,6 +45,15 @@ public class User implements UserDetails {
     @ManyToOne( optional = false)
     @JoinColumn(name = "institution_id")
     private Institution institution;
+
+    @OneToMany(mappedBy = "user", orphanRemoval = true)
+    private Set<CourseUser> courseUsers;
+
+    @OneToMany(mappedBy = "user", orphanRemoval = true)
+    private Set<Task> tasks;
+
+    @OneToMany(mappedBy = "user", orphanRemoval = true)
+    private Set<Solution> solutions;
 
     @ManyToOne
     @JoinColumn(name = "group_id")

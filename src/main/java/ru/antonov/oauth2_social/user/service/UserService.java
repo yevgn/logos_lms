@@ -49,6 +49,14 @@ public class UserService {
         return userRepository.findByEmail(email);
     }
 
+    public List<User> findAllByIdList(List<UUID> userIdList){
+        return userRepository.findAllByIdList(userIdList);
+    }
+
+    public List<User> findAllByGroupIdList(List<UUID> groupIdList){
+        return userRepository.findAllByGroupIdList(groupIdList);
+    }
+
     public User enableAndSave(User user){
         user.setEnabled(true);
         return userRepository.saveAndFlush(user);
@@ -205,5 +213,13 @@ public class UserService {
 
     public void deleteByEmail(String email) {
         userRepository.deleteByEmail(email);
+    }
+
+    public List<User> findAllByCourseId(UUID courseId) {
+        return userRepository.findAllByCourseId(courseId);
+    }
+
+    public List<User> findAllByInstitutionIdNotInCourse(UUID institutionId, UUID courseId){
+        return userRepository.findAllByInstitutionIdNotInCourse(institutionId, courseId);
     }
 }

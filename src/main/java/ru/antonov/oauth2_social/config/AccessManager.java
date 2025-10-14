@@ -4,15 +4,22 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import ru.antonov.oauth2_social.course.entity.CourseUser;
+import ru.antonov.oauth2_social.course.entity.CourseUserKey;
+import ru.antonov.oauth2_social.course.repository.CourseUserRepository;
+import ru.antonov.oauth2_social.user.entity.Role;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class AccessManager {
+    private final CourseUserRepository courseUserRepository;
+
     public boolean isUserHasAccessToOther(User userRequestedForAccess, User toAccessTo, boolean isNeedToHaveHigherPriority,
                                           boolean isNeedToBeInOneInstitution){
 
@@ -42,6 +49,33 @@ public class AccessManager {
         );
 
         return Objects.equals(userRequestedForAccess.getInstitution().getId(), instituteId);
+    }
+
+    public boolean isUserHasAccessToCourse(
+            User user, UUID courseId,  boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent){
+        Optional<CourseUser> courseUserOpt = courseUserRepository.findById(
+                CourseUserKey
+                        .builder()
+                        .userId(user.getId())
+                        .courseId(courseId)
+                        .build()
+        );
+
+        if(courseUserOpt.isEmpty()){
+            return false;
+        }
+
+        CourseUser courseUser = courseUserOpt.get();
+
+        if(isNeedToBeCreator){
+            return courseUser.isCreator();
+        }
+
+        if(isNeedToHaveHigherRoleThanStudent){
+            return user.getRole().getPriorityValue() > Role.STUDENT.getPriorityValue();
+        }
+
+        return true;
     }
 
 

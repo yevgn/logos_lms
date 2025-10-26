@@ -9,7 +9,7 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 
-import org.springframework.security.crypto.password.PasswordEncoder;
+
 import org.springframework.stereotype.Service;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +20,7 @@ import ru.antonov.oauth2_social.auth.entity.TokenType;
 import ru.antonov.oauth2_social.auth.exception.*;
 import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
 import ru.antonov.oauth2_social.user.entity.User;
+import ru.antonov.oauth2_social.user.exception.AccountActivationTokenRenewEx;
 import ru.antonov.oauth2_social.user.service.UserService;
 
 import java.util.List;
@@ -34,9 +35,9 @@ public class AuthService {
     private final TokenService tokenService;
     private final UserService userService;
     private final TwoFactorAuthenticationService tfaAuthService;
-    private final EmailService emailService;
+    private final AuthEmailService authEmailService;
     private final PasswordValidationService passwordValidationService;
-    private final PasswordEncoder passwordEncoder;
+    //private final PasswordEncoder passwordEncoder;
 
     public AuthResponseDto authenticate(AuthRequestDto request) {
         tryAuth(request.getEmail(), request.getPassword());
@@ -90,6 +91,9 @@ public class AuthService {
 
         var accessToken = jwtService.generateUserToken(List.of(user.getRole().name()), user.getEmail(), TokenMode.ACCESS);
         var refreshToken = jwtService.generateUserToken(List.of(user.getRole().name()), user.getEmail(), TokenMode.REFRESH);
+
+        tokenService.saveToken(accessToken, TokenType.BEARER, TokenMode.ACCESS, user);
+        tokenService.saveToken(refreshToken, TokenType.BEARER, TokenMode.REFRESH, user);
 
         return AuthResponseDto.builder()
                 .accessToken(accessToken)
@@ -165,11 +169,11 @@ public class AuthService {
         String resetPasswordToken = jwtService.generateUserToken(List.of(user.getRole().name()), email, TokenMode.RESET_PASSWORD);
         tokenService.saveToken(resetPasswordToken, TokenType.BEARER, TokenMode.RESET_PASSWORD, user );
 
-        emailService.sendMailForPasswordReset(user, resetPasswordToken);
+        authEmailService.sendMailForPasswordReset(user, resetPasswordToken);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void resetPassword(ResetPasswordRequestDto request) {
+    public AuthResponseDto resetPassword(ResetPasswordRequestDto request) {
         String email = request.getEmail();
         String token = request.getResetPasswordToken();
 
@@ -214,12 +218,28 @@ public class AuthService {
             );
         }
 
-        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPassword(newPassword);
         userService.save(user);
 
-        tokenService.revokeUserTokensByTokenModeIn(email, List.of(TokenMode.RESET_PASSWORD));
+        tokenService.revokeUserTokensByTokenModeIn(
+                email,
+                List.of(TokenMode.RESET_PASSWORD, TokenMode.ACCESS, TokenMode.REFRESH)
+        );
 
-        emailService.sendPasswordSuccessfulResetNotification(user);
+        var accessToken = jwtService.generateUserToken(List.of(user.getRole().name()), user.getEmail(), TokenMode.ACCESS);
+        var refreshToken = jwtService.generateUserToken(List.of(user.getRole().name()), user.getEmail(), TokenMode.REFRESH);
+
+        tokenService.saveToken(accessToken, TokenType.BEARER, TokenMode.ACCESS, user);
+        tokenService.saveToken(refreshToken, TokenType.BEARER, TokenMode.REFRESH, user);
+
+        authEmailService.sendPasswordSuccessfulResetNotification(user);
+
+        return AuthResponseDto
+                .builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .isTfaEnabled(user.isTfaEnabled())
+                .build();
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -256,7 +276,7 @@ public class AuthService {
         String resetTfaToken = jwtService.generateUserToken(List.of(user.getRole().name()), email, TokenMode.RESET_2FA);
         tokenService.saveToken(resetTfaToken, TokenType.BEARER, TokenMode.RESET_2FA, user );
 
-        emailService.sendMailForTfaReset(user, resetTfaToken);
+        authEmailService.sendMailForTfaReset(user, resetTfaToken);
     }
 
     private void tryAuth(String email, String password){
@@ -268,10 +288,10 @@ public class AuthService {
                     )
             );
         } catch (DisabledException ex){
-            throw new AccountNotEnabledEx(
-                    "Ошибка доступа. Ваш аккаунт не активирован. " +
+            throw new AuthenticationEx(
+                    "Ошибка аутентификации. Ваш аккаунт не активирован. " +
                             "Чтобы активировать аккаунт, подтвердите ваш email",
-                    String.format("Ошибка доступа. Аккаунт пользователя %s не активирован", email)
+                    String.format("Ошибка аутентификации. Аккаунт пользователя %s не активирован", email)
             );
         } catch (AuthenticationException ex){
             throw new AuthenticationEx(
@@ -285,7 +305,7 @@ public class AuthService {
     public AuthResponseDto resetTfa(String email, String token) {
         User user = userService.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundEx(
-                        "Пользователь с таким аккаунтом не найден",
+                        "Пользователь с таким email не найден",
                         String.format("Ошибка сброса 2FA secret. Пользователь с %s email не найден", email)
                 ));
 
@@ -325,7 +345,7 @@ public class AuthService {
                 List.of(TokenMode.ACCESS, TokenMode.REFRESH, TokenMode.RESET_2FA)
         );
 
-        emailService.sendTfaSuccessfulResetNotification(user);
+        authEmailService.sendTfaSuccessfulResetNotification(user);
 
         return AuthResponseDto.builder()
                 .accessToken(accessToken)
@@ -362,7 +382,7 @@ public class AuthService {
         tokenService.saveToken(accessToken, TokenType.BEARER, TokenMode.ACCESS, user);
         tokenService.saveToken(refreshToken, TokenType.BEARER, TokenMode.REFRESH, user);
 
-        emailService.sendTfaSuccessfulEnabledNotification(user);
+        authEmailService.sendTfaSuccessfulEnabledNotification(user);
 
         return AuthResponseDto
                 .builder()
@@ -401,7 +421,7 @@ public class AuthService {
         tokenService.saveToken(accessToken, TokenType.BEARER, TokenMode.ACCESS, user);
         tokenService.saveToken(refreshToken, TokenType.BEARER, TokenMode.REFRESH, user);
 
-        emailService.sendTfaSuccessfulDisabledNotification(user);
+        authEmailService.sendTfaSuccessfulDisabledNotification(user);
 
         return AuthResponseDto
                 .builder()
@@ -411,7 +431,56 @@ public class AuthService {
                 .build();
     }
 
+    public void activateAccount(String accountActivationToken, String userEmail){
+        User user = userService.findByEmail(userEmail)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Пользователь не найден",
+                        String.format("Ошибка активации аккаунта. Пользователь с %s email не найден", userEmail)
+                ));
+
+        if(user.isEnabled()){
+            throw new AccountAlreadyEnabledEx(
+                    "Ваш аккаунт уже активирован!",
+                    String.format("Ошибка при активации аккаунта. Аккаунт пользователя %s уже активирован!", userEmail)
+            );
+        }
+
+        User tokenUser = tokenService.findUserByToken(accountActivationToken)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Пользователь не найден",
+                        String.format("Ошибка активации аккаунта. Пользователь по токену %s не найден", accountActivationToken)
+                ));
+
+        if (!tokenUser.equals(user)) {
+            throw new TokenUserMismatchEx(
+                    "Данный токен принадлежит другому пользователю.",
+                    String.format("Ошибка активации аккаунта. Несовпадение: токен принадлежит пользователю %s." +
+                                    " Заявленный пользователь: %s",
+                            tokenUser.getEmail(), userEmail
+                    )
+            );
+        }
+
+        if (!jwtService.isTokenValid(accountActivationToken, TokenMode.ACCOUNT_ACTIVATION)) {
+            tokenService.revokeUserTokensByTokenModeIn(userEmail, List.of(TokenMode.ACCOUNT_ACTIVATION));
+            String newToken = jwtService.generateUserToken(
+                    List.of(user.getRole().name()), userEmail, TokenMode.ACCOUNT_ACTIVATION
+            );
+            tokenService.saveToken(newToken, TokenType.BEARER, TokenMode.ACCOUNT_ACTIVATION, user);
+            authEmailService.sendMailForAccountActivation(user, newToken );
+            throw new AccountActivationTokenRenewEx(
+                    "Время действия ссылки истекло. Вы получите новую ссылку на ваш email",
+                    String.format("Неуспешная активация аккаунта. account_activation_token пользователя %s истек. " +
+                            "Произошла выдача нового токена", userEmail)
+            );
+        }
+
+        userService.enableAndSave(user);
+
+        tokenService.revokeUserTokensByTokenModeIn(userEmail, List.of(TokenMode.ACCOUNT_ACTIVATION));
+    }
+
     private boolean isCorrectCredentials(User user, String email, String password){
-        return Objects.equals(user.getEmail(), email) && passwordEncoder.matches(password, user.getPassword());
+        return Objects.equals(user.getEmail(), email) && Objects.equals(user.getPassword(), password);
     }
 }

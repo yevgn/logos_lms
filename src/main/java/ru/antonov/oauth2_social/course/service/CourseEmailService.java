@@ -10,7 +10,6 @@ import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-import ru.antonov.oauth2_social.course.entity.Course;
 import ru.antonov.oauth2_social.exception.MailAuthenticationEx;
 import ru.antonov.oauth2_social.exception.MailSendEx;
 import ru.antonov.oauth2_social.exception.MessagingEx;
@@ -21,7 +20,7 @@ import java.util.Arrays;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class EmailService {
+public class CourseEmailService {
     @Value("${spring.application.sender-email}")
     private String senderEmail;
     @Value("${spring.application.url.get-course-info}")

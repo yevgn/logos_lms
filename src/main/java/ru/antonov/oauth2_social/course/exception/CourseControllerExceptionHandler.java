@@ -13,14 +13,14 @@ import ru.antonov.oauth2_social.exception.UserAlreadyJoinedCourseEx;
 
 @ControllerAdvice
 @Slf4j
-public class CustomExceptionHandler {
+public class CourseControllerExceptionHandler {
     @ExceptionHandler(JsonSerializationEx.class)
     public ResponseEntity<ApiError> handleJsonSerializationEx(JsonSerializationEx ex) {
         log.error(ex.getDebugMessage());
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
@@ -31,7 +31,7 @@ public class CustomExceptionHandler {
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
@@ -42,7 +42,29 @@ public class CustomExceptionHandler {
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(TaskAndMaterialFileLimitExceededEx.class)
+    public ResponseEntity<ApiError> handleTaskAndMaterialFileLimitExceededEx(TaskAndMaterialFileLimitExceededEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(FileNameNotUniqueEx.class)
+    public ResponseEntity<ApiError> handleFileNameNotUniqueEx(FileNameNotUniqueEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }

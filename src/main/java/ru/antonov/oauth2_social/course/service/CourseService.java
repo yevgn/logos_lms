@@ -7,12 +7,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import ru.antonov.oauth2_social.config.AccessManager;
 import ru.antonov.oauth2_social.course.dto.*;
-import ru.antonov.oauth2_social.course.entity.Course;
-import ru.antonov.oauth2_social.course.entity.CourseUser;
-import ru.antonov.oauth2_social.course.entity.CourseUserKey;
-import ru.antonov.oauth2_social.course.entity.EntityFactory;
+import ru.antonov.oauth2_social.course.entity.*;
+import ru.antonov.oauth2_social.course.exception.FileNameNotUniqueEx;
+import ru.antonov.oauth2_social.course.exception.TaskAndMaterialFileLimitExceededEx;
 import ru.antonov.oauth2_social.course.repository.CourseRepository;
 import ru.antonov.oauth2_social.course.repository.CourseUserRepository;
 import ru.antonov.oauth2_social.exception.AccessDeniedEx;
@@ -20,10 +20,12 @@ import ru.antonov.oauth2_social.exception.DBConstraintViolationEx;
 import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
 import ru.antonov.oauth2_social.exception.UserAlreadyJoinedCourseEx;
 import ru.antonov.oauth2_social.user.dto.UserShortResponseDto;
+import ru.antonov.oauth2_social.user.entity.Role;
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.user.service.UserService;
 
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,7 +37,9 @@ public class CourseService {
     private final CourseUserRepository courseUserRepository;
     private final UserService userService;
     private final AccessManager accessManager;
-    private final EmailService emailService;
+    private final CourseEmailService courseEmailService;
+    private final FileService fileService;
+    private final CourseLimitCounter courseLimitCounter;
 
     public Course save(Course course) {
         return courseRepository.saveAndFlush(course);
@@ -77,7 +81,7 @@ public class CourseService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public CourseCreateResponseDto save(CourseCreateWithUserIdListRequestDto request, User creator) {
+    public CourseResponseDto save(CourseCreateWithUserIdListRequestDto request, User creator) {
         List<User> users = userService.findAllByIdList(request.getUserIdList());
         users.forEach(u ->
                 checkUserHasAccessToOtherOrElseThrow(creator, u, false, true)
@@ -90,7 +94,7 @@ public class CourseService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public CourseCreateResponseDto save(CourseCreateWithGroupIdListRequestDto request, User creator) {
+    public CourseResponseDto save(CourseCreateWithGroupIdListRequestDto request, User creator) {
         List<User> users = userService.findAllByGroupIdList(request.getGroupIdList());
         users.forEach(u ->
                 checkUserHasAccessToOtherOrElseThrow(creator, u, false, true)
@@ -119,24 +123,36 @@ public class CourseService {
         }
     }
 
-    private CourseCreateResponseDto save(Course course, List<User> users, User creator) {
+    private CourseResponseDto save(Course course, List<User> users, User creator) {
+        courseRepository.saveAndFlush(course);
+
         Set<CourseUser> courseUsers = users.stream()
-                .map(u -> CourseUser
-                        .builder()
-                        .user(u)
-                        .build()
+                .filter(u -> !u.equals(creator))
+                .map(u -> {
+                            CourseUserKey key = new CourseUserKey(course.getId(), u.getId());
+                            return CourseUser
+                                    .builder()
+                                    .id(key)
+                                    .user(u)
+                                    .course(course)
+                                    .build();
+
+                        }
                 )
                 .collect(Collectors.toSet());
-        courseUsers.add(
+
+        course.setCourseUsers(courseUsers);
+
+        CourseUserKey creatorKey = new CourseUserKey(course.getId(), creator.getId());
+        course.addCourseUser(
                 CourseUser
                         .builder()
+                        .id(creatorKey)
                         .course(course)
                         .user(creator)
                         .isCreator(true)
                         .build()
         );
-
-        course.setCourseUsers(courseUsers);
 
         try {
             courseRepository.saveAndFlush(course);
@@ -165,9 +181,13 @@ public class CourseService {
 
         final String courseName = course.getName();
 
-        users.forEach(u -> emailService.sendCourseJoinNotification(u, courseName));
+        users.forEach(u -> courseEmailService.sendCourseJoinNotification(u, courseName));
 
-        return DtoFactory.makeCourseCreateResponseDto(course, creator, users);
+        return DtoFactory.makeCourseResponseDto(
+                course,
+                creator,
+                courseUsers.stream().map(CourseUser::getUser).toList()
+        );
     }
 
     private void checkPrincipalHasAccessToCourseOrElseThrow(
@@ -200,7 +220,7 @@ public class CourseService {
     public List<UserShortResponseDto> addUsersToCourseByUserIdList(UUID courseId, List<UUID> userIdList, User tutor) {
         Course course = findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
-                        String.format("Ошибка. Курса с id %s не существует", courseId),
+                        "Ошибка. Курса с указанным id не существует",
                         String.format("Ошибка при добавлении пользователей к курсу пользователем %s. " +
                                 "Курса с id %s не существует", SecurityContextHolder.getContext().getAuthentication().getName(), courseId)
                 ));
@@ -242,11 +262,15 @@ public class CourseService {
         checkIsAnyUserAlreadyJoinedCourse(users, course.getId());
 
         Set<CourseUser> courseUsers = users.stream()
-                .map(u -> CourseUser
-                        .builder()
-                        .course(course)
-                        .user(u)
-                        .build()
+                .map(u -> {
+                            CourseUserKey key = new CourseUserKey(course.getId(), u.getId());
+                            return CourseUser
+                                    .builder()
+                                    .id(key)
+                                    .course(course)
+                                    .user(u)
+                                    .build();
+                        }
                 )
                 .collect(Collectors.toSet());
 
@@ -254,7 +278,7 @@ public class CourseService {
 
         courseRepository.saveAndFlush(course);
 
-        users.forEach(u -> emailService.sendCourseJoinNotification(u, course.getName()));
+        users.forEach(u -> courseEmailService.sendCourseJoinNotification(u, course.getName()));
 
         return users
                 .stream()
@@ -274,6 +298,153 @@ public class CourseService {
         course.removeUsers(users);
 
         courseRepository.saveAndFlush(course);
+    }
+
+    public CourseResponseDto getCourseInfoById(User principal, UUID courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        String.format("Ошибка. Курса с id %s не существует", courseId),
+                        String.format("Ошибка при получении информации о курсе. Курса с id %s не существует", courseId)
+                ));
+
+        List<CourseUser> courseUsers = courseUserRepository.findAllByCourseId(courseId);
+        List<User> users = courseUsers.stream()
+                .map(CourseUser::getUser)
+                .toList();
+
+        User creator = courseUsers.stream()
+                .filter(CourseUser::isCreator)
+                .map(CourseUser::getUser)
+                .findFirst()
+                .orElse(null);
+
+
+        CourseResponseDto courseResponse = DtoFactory.makeCourseResponseDto(course, creator, users);
+
+        if (!principal.getRole().equals(Role.ADMIN) && !principal.getRole().equals(Role.TUTOR)) {
+            courseResponse.setCode(null);
+        }
+
+        return courseResponse;
+    }
+
+    public List<CourseResponseDto> findCoursesByInstitutionId(User principal, UUID institutionId) {
+        List<Course> courses = courseRepository.findAllByInstitutionId(institutionId);
+
+        return courses.stream()
+                .map(c -> {
+
+                    CourseResponseDto courseResponse = DtoFactory.makeCourseResponseDto(
+                            c,
+                            courseUserRepository.findCourseCreatorByCourseId(c.getId()).orElse(null),
+                            courseUserRepository.findAllByCourseId(c.getId())
+                                    .stream()
+                                    .map(CourseUser::getUser)
+                                    .toList()
+                    );
+                    if (!principal.getRole().equals(Role.ADMIN) && !principal.getRole().equals(Role.TUTOR)) {
+                        courseResponse.setCode(null);
+                    }
+                    return courseResponse;
+
+                })
+                .toList();
+    }
+
+    public List<CourseResponseDto> findCoursesByUser(User principal) {
+        List<Course> courses = principal.getRole().equals(Role.ADMIN) ?
+                courseRepository.findAllByInstitutionId(principal.getInstitution().getId()) :
+                courseUserRepository.findCoursesByUserId(principal.getId());
+
+        return courses.stream()
+                .map(c -> {
+
+                    CourseResponseDto courseResponse = DtoFactory.makeCourseResponseDto(
+                            c,
+                            courseUserRepository.findCourseCreatorByCourseId(c.getId()).orElse(null),
+                            courseUserRepository.findAllByCourseId(c.getId())
+                                    .stream()
+                                    .map(CourseUser::getUser)
+                                    .toList()
+                    );
+                    if (!principal.getRole().equals(Role.ADMIN) && !principal.getRole().equals(Role.TUTOR)) {
+                        courseResponse.setCode(null);
+                    }
+                    return courseResponse;
+
+                })
+                .toList();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public CourseMaterialResponseDto saveCourseMaterial(User principal, UUID courseId, CourseMaterialCreateRequestDto request) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        String.format("Ошибка. Курса с id %s не существует", courseId),
+                        String.format("Ошибка при загрузке файлов в курс. Курса с id %s не существует", courseId)
+                ));
+
+        UUID courseMaterialId = UUID.randomUUID();
+
+        List<MultipartFile> files = request.getContent();
+
+        if (courseLimitCounter.isTaskAndMaterialFileAmountExceedsLimit(course.getId(), files.size())) {
+            throw new TaskAndMaterialFileLimitExceededEx(
+                    "Ошибка при загрузке файлов. Превышено максимально допустимое число файлов для этого курса",
+                    String.format("Ошибка при загрузке файлов. " +
+                            "Превышено максимально допустимое количество учебных файлов для курса с %s id", course.getId())
+            );
+        }
+
+        List<FileService.FileInfo> contentInfoList = files.stream()
+                .map(f -> {
+                    UUID fileId = UUID.randomUUID();
+                    String path = fileService.generateCourseMaterialContentFilePath(
+                            course.getId(), courseMaterialId, fileId, getFileExtension(f.getOriginalFilename())
+                    );
+                    return new FileService.FileInfo(path, f.getOriginalFilename(), f, fileId);
+                })
+                .toList();
+
+        List<CourseMaterialContent> courseMaterialContent = contentInfoList.stream()
+                .map(ci -> CourseMaterialContent
+                        .builder()
+                        .id(ci.getId())
+                        .originalFileName(ci.getFileName())
+                        .path(ci.getPath())
+                        .build()
+                )
+                .toList();
+
+        CourseMaterial courseMaterial = CourseMaterial
+                .builder()
+                .id(courseMaterialId)
+                .topic(request.getTopic())
+                .courseMaterialContent(courseMaterialContent)
+                .publishedAt(LocalDateTime.now())
+                .course(course)
+                .user(principal)
+                .build();
+
+        course.addCourseMaterial(courseMaterial);
+        courseRepository.saveAndFlush(course);
+
+        fileService.uploadCourseMaterialContentFiles(contentInfoList);
+
+        return DtoFactory.makeCourseMaterialResponseDto(courseMaterial);
+    }
+
+    private String getFileExtension(String filename) {
+        if (filename == null) {
+            throw new IllegalArgumentException("Ошибка получения расширения файла. filename = null");
+        }
+
+        int dotIndex = filename.lastIndexOf('.');
+        if(dotIndex == -1){
+            throw new IllegalArgumentException("Ошибка получения расширения файла. filename не содержит расширение");
+        }
+
+        return filename.substring(dotIndex + 1);
     }
 }
 

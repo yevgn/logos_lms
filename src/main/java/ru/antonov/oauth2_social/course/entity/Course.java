@@ -3,6 +3,7 @@ package ru.antonov.oauth2_social.course.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.proxy.HibernateProxy;
+import ru.antonov.oauth2_social.course.exception.IllegalTaskDeadlineEx;
 import ru.antonov.oauth2_social.user.entity.Institution;
 import ru.antonov.oauth2_social.user.entity.User;
 
@@ -41,23 +42,39 @@ public class Course {
     @JoinColumn(name = "institution_id")
     private Institution institution;
 
-    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.REMOVE}, orphanRemoval = true)
+    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
     private Set<CourseUser> courseUsers;
 
-    @OneToMany(mappedBy = "course", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
+    private Set<CourseMaterial> courseMaterials;
+
+    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE} , orphanRemoval = true)
     private Set<Task> tasks;
 
-    @OneToMany(mappedBy = "course",  cascade = CascadeType.REMOVE, orphanRemoval = true)
-    private Set<Solution> solutions;
-
     public void addCourseUsers(Set<CourseUser> courseUsers){
-        this.courseUsers.addAll(courseUsers);
-        courseUsers.forEach(cu -> cu.setCourse(this));
+        if(this.courseUsers != null) {
+            this.courseUsers.addAll(courseUsers);
+            courseUsers.forEach(cu -> cu.setCourse(this));
+        }
+    }
+
+    public void addCourseUser(CourseUser courseUser){
+        if(this.courseUsers != null) {
+            this.courseUsers.add(courseUser);
+           courseUser.setCourse(this);
+        }
     }
 
     public void setCourseUsers(Set<CourseUser> courseUsers){
         this.courseUsers = courseUsers;
         courseUsers.forEach(cu -> cu.setCourse(this));
+    }
+
+    public void addCourseMaterial(CourseMaterial courseMaterial){
+        if(this.courseMaterials != null){
+            this.courseMaterials.add(courseMaterial);
+            courseMaterial.setCourse(this);
+        }
     }
 
     public void removeUsers(List<User> users){
@@ -67,6 +84,11 @@ public class Course {
                         .id(CourseUserKey.builder().userId(u.getId()).courseId(getId()).build())
                         .build()
         ));
+    }
+
+    @PrePersist
+    private void init(){
+        createdAt = LocalDateTime.now();
     }
 
     @Override

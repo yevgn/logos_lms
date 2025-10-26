@@ -2,9 +2,13 @@ package ru.antonov.oauth2_social.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class VerificationRequestDto {
     @NotBlank(message = "поле email не должно быть пустым")
     @Pattern(

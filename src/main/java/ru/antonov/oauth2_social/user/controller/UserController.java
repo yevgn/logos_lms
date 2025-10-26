@@ -1,15 +1,21 @@
 package ru.antonov.oauth2_social.user.controller;
 
-import jakarta.persistence.EntityNotFoundException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 
 import org.passay.CharacterRule;
 import org.passay.EnglishCharacterData;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.validation.annotation.Validated;
@@ -18,20 +24,20 @@ import org.springframework.web.multipart.MultipartFile;
 
 import ru.antonov.oauth2_social.auth.entity.TokenMode;
 import ru.antonov.oauth2_social.auth.entity.TokenType;
-import ru.antonov.oauth2_social.auth.exception.TokenUserMismatchEx;
+import ru.antonov.oauth2_social.auth.service.AuthEmailService;
 import ru.antonov.oauth2_social.auth.service.JwtService;
 import ru.antonov.oauth2_social.auth.service.TokenService;
 import ru.antonov.oauth2_social.config.AccessManager;
+import ru.antonov.oauth2_social.course.service.CourseService;
 import ru.antonov.oauth2_social.user.dto.DtoFactory;
 import ru.antonov.oauth2_social.user.dto.UserCreateRequestDto;
 import ru.antonov.oauth2_social.user.dto.UserResponseDto;
-import ru.antonov.oauth2_social.user.dto.UserShortResponseDto;
+
 import ru.antonov.oauth2_social.user.entity.EntityFactory;
 import ru.antonov.oauth2_social.user.entity.Group;
+import ru.antonov.oauth2_social.user.entity.Role;
 import ru.antonov.oauth2_social.user.entity.User;
-import ru.antonov.oauth2_social.user.exception.AccountActivationTokenRenewEx;
 import ru.antonov.oauth2_social.user.exception.EmptyFileEx;
-import ru.antonov.oauth2_social.user.service.EmailService;
 import ru.antonov.oauth2_social.user.service.GroupService;
 import ru.antonov.oauth2_social.user.service.PasswordGenerator;
 import ru.antonov.oauth2_social.user.service.UserService;
@@ -51,16 +57,72 @@ public class UserController {
     private final UserService userService;
     private final GroupService groupService;
     private final TokenService tokenService;
-    private final EmailService emailService;
+    private final AuthEmailService authEmailService;
+    private final CourseService courseService;
     private final JwtService jwtService;
     private final AccessManager accessManager;
-    private final PasswordEncoder passwordEncoder;
+    // private final PasswordEncoder passwordEncoder;
     private final PasswordGenerator passwordGenerator;
 
     private final Integer PASSWORD_LENGTH = 6;
     private final List<CharacterRule> PASSWORD_GEN_RULES = List.of(new CharacterRule(EnglishCharacterData.Digit));
 
-    @PostMapping("/csv/institution")
+    @Operation(
+            summary = "Добавление пользователей в учебное заведение csv списком",
+            description = "Требуется роль ADMIN",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление пользователями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Успешное добавление пользователей"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не привязаны к учебному заведению"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "В списке некорректные/дублирующиеся данные, данные неправильного формата или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Вы пытаетесь загрузить пустой файл"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Один или несколько пользователей из файла уже существуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Ошибка. Один или несколько указанных пользователей уже существуют"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "500",
+                    description = "Ошибка при чтении файла",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "500",
+                                          "message": "Ошибка на сервере"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @PostMapping(value = "/csv/institution", consumes = "multipart/form-data")
     public ResponseEntity<List<UserResponseDto>> addUsersCSVByInstitutionId(
             @AuthenticationPrincipal User principal,
             @RequestParam("file") MultipartFile file
@@ -87,7 +149,62 @@ public class UserController {
 
     }
 
-    @PostMapping("/csv/group")
+    @Operation(
+            summary = "Добавление пользователей в учебную группу csv списком",
+            description = "Требуется роль ADMIN",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление пользователями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Успешное добавление пользователей"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не привязаны к учебному заведению"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "В списке некорректные/дублирующиеся данные, данные неправильного формата или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Вы пытаетесь загрузить пустой файл"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Один или несколько пользователей из файла уже существуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Ошибка. Один или несколько указанных пользователей уже существуют"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "500",
+                    description = "Ошибка при чтении файла",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "500",
+                                          "message": "Ошибка на сервере"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @PostMapping(value = "/csv/group", consumes = "multipart/form-data")
     public ResponseEntity<List<UserResponseDto>> addUsersCSVByGroupId(
             @AuthenticationPrincipal User principal,
             @RequestParam("file") MultipartFile file,
@@ -118,39 +235,136 @@ public class UserController {
                         .map(DtoFactory::makeUserResponseDto)
                         .toList()
         );
-
     }
 
+    @Operation(
+            summary = "Добавление пользователя",
+            description = "Требуется роль ADMIN",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление пользователями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Успешное добавление пользователя"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не привязаны к учебному заведению"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Неправильный формат email"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Пользователь уже существует",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Ошибка. Пользователь с email test@gmail.com уже существует"
+                                        }
+                                    """)
+                    ))
+    }
+    )
     @PostMapping
     public ResponseEntity<UserResponseDto> addUser(
             @AuthenticationPrincipal User principal,
             @Valid @RequestBody UserCreateRequestDto request
-    ){
+    ) {
         checkPrincipalIsAttachedToInstitutionOrElseThrow(principal);
 
-        Group group = groupService.findByInstitutionIdAndName(principal.getInstitution().getId(), request.getGroupName())
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Группы с указанным названием не существует",
-                        String.format("Неудача при поиске группы. Группа с названием %s в учебном заведении %s не" +
-                                " существует", request.getGroupName(), principal.getInstitution().getId())
-                ));
+        User user;
+        if (request.getRole().equals(Role.TUTOR)) {
+            user = EntityFactory.makeUserEntity(
+                    request,
+                    "{noop}" + passwordGenerator.generateRawPassword(PASSWORD_LENGTH, PASSWORD_GEN_RULES),
+                    principal.getInstitution(),
+                    null
+            );
+        } else {
+            Group group = groupService.findByInstitutionIdAndName(principal.getInstitution().getId(), request.getGroupName())
+                    .orElseThrow(() -> new EntityNotFoundEx(
+                            "Группы с указанным названием не существует",
+                            String.format("Неудача при поиске группы. Группа с названием %s в учебном заведении %s не" +
+                                    " существует", request.getGroupName(), principal.getInstitution().getId())
+                    ));
 
-        User user = EntityFactory.makeUserEntity(
-                request,
-                passwordEncoder.encode(passwordGenerator.generateRawPassword(PASSWORD_LENGTH, PASSWORD_GEN_RULES)),
-                principal.getInstitution(),
-                group
-        );
+            user = EntityFactory.makeUserEntity(
+                    request,
+                    "{noop}" + passwordGenerator.generateRawPassword(PASSWORD_LENGTH, PASSWORD_GEN_RULES),
+                    principal.getInstitution(),
+                    group
+            );
+        }
 
         user = userService.save(user);
 
         sendMailForAccountActivation(user);
 
         return ResponseEntity.ok(
-                DtoFactory.makeUserResponseDto(userService.save(user))
+                DtoFactory.makeUserResponseDto(user)
         );
     }
 
+    @Operation(
+            summary = "Добавление пользователей ",
+            description = "Требуется роль ADMIN",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление пользователями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Успешное добавление пользователей"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не привязаны к учебному заведению"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Неправильный формат email"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Один или несколько пользователей уже существуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Ошибка. Пользователь с email test@gmail.com уже существует"
+                                        }
+                                    """)
+                    ))
+    }
+    )
     @PostMapping("/batch")
     public ResponseEntity<List<UserResponseDto>> addUsersBatch(
             @AuthenticationPrincipal User principal,
@@ -160,21 +374,28 @@ public class UserController {
 
         List<User> userEntities = requestList.stream()
                 .map(dto -> {
-                            Group group = groupService.findByInstitutionIdAndName(principal.getInstitution().getId(), dto.getGroupName())
-                                    .orElseThrow(() -> new EntityNotFoundEx(
-                                            String.format("Группы %s в данном учебном заведение не существует", dto.getGroupName()),
-                                            String.format("Ошибка при добавлении списка пользователей. " +
-                                                            "Группы %s в учебном заведении %s не существует",
-                                                    dto.getGroupName(), principal.getInstitution().getId())
-                                    ));
-                            return EntityFactory.makeUserEntity(
-                                    dto,
-                                    passwordEncoder.encode(
-                                            passwordGenerator.generateRawPassword(PASSWORD_LENGTH, PASSWORD_GEN_RULES)
-                                    ),
-                                    principal.getInstitution(),
-                                    group
-                            );
+                            if (dto.getRole().equals(Role.TUTOR)) {
+                                return EntityFactory.makeUserEntity(
+                                        dto,
+                                        "{noop}" + passwordGenerator.generateRawPassword(PASSWORD_LENGTH, PASSWORD_GEN_RULES),
+                                        principal.getInstitution(),
+                                        null
+                                );
+                            } else {
+                                Group group = groupService.findByInstitutionIdAndName(principal.getInstitution().getId(), dto.getGroupName())
+                                        .orElseThrow(() -> new EntityNotFoundEx(
+                                                String.format("Группы %s в данном учебном заведение не существует", dto.getGroupName()),
+                                                String.format("Ошибка при добавлении списка пользователей. " +
+                                                                "Группы %s в учебном заведении %s не существует",
+                                                        dto.getGroupName(), principal.getInstitution().getId())
+                                        ));
+                                return EntityFactory.makeUserEntity(
+                                        dto,
+                                        "{noop}" + passwordGenerator.generateRawPassword(PASSWORD_LENGTH, PASSWORD_GEN_RULES),
+                                        principal.getInstitution(),
+                                        group
+                                );
+                            }
                         }
                 )
                 .toList();
@@ -189,10 +410,42 @@ public class UserController {
         );
     }
 
+    @Operation(
+            summary = "Получение информации о пользователе по его id",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление пользователями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому пользователю"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "параметр user_id отсутствует"
+                                        }
+                                    """)
+                    ))
+    }
+    )
     @GetMapping("/id")
     public ResponseEntity<UserResponseDto> findUserById(
             @AuthenticationPrincipal User principal,
-            @RequestParam("user_id") UUID userId
+            @Valid @NotNull(message = "поле user_id не может отсутствовать") @RequestParam("user_id") UUID userId
     ) {
         User user = userService.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundEx(
@@ -202,9 +455,46 @@ public class UserController {
 
         checkUserHasAccessToOtherOrElseThrow(principal, user, true, true);
 
-        return ResponseEntity.ok(DtoFactory.makeUserResponseDto(user));
+        UserResponseDto response = DtoFactory.makeUserResponseDto(user);
+        if(!principal.getRole().equals(Role.ADMIN)){
+            response.setPassword(null);
+        }
+
+        return ResponseEntity.ok(response);
     }
 
+    @Operation(
+            summary = "Получение информации о пользователе по его email",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление пользователями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому пользователю"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "параметр user_email отсутствует"
+                                        }
+                                    """)
+                    ))
+    }
+    )
     @GetMapping("/email")
     public ResponseEntity<UserResponseDto> findUserByEmail(
             @AuthenticationPrincipal User principal,
@@ -218,83 +508,56 @@ public class UserController {
 
         checkUserHasAccessToOtherOrElseThrow(principal, user, true, true);
 
-        return ResponseEntity.ok(DtoFactory.makeUserResponseDto(user));
+        UserResponseDto response = DtoFactory.makeUserResponseDto(user);
+        if(!principal.getRole().equals(Role.ADMIN)){
+            response.setPassword(null);
+        }
+
+        return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/group")
-    public ResponseEntity<List<UserShortResponseDto>> findUsersByInstitutionIdAndGroup(
-            @AuthenticationPrincipal User principal,
-            @RequestParam("institution_id") UUID institutionId,
-            @RequestParam("group") String group
-    ) {
-        checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
-
-        List<User> users = userService.findAllByInstitutionIdAndGroup(institutionId, group);
-
-        return ResponseEntity.ok(
-                users.stream()
-                        .map(DtoFactory::makeUserShortResponseDto)
-                        .toList()
-        );
+    @Operation(
+            summary = "Удаление пользователя по id",
+            description = "Требуется роль ADMIN",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление пользователями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому пользователю"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Пользователя с указанным id не существует"
+                                        }
+                                    """)
+                    ))
     }
-
-    @GetMapping("/course")
-    public ResponseEntity<List<UserShortResponseDto>> findUsersByCourseId(
-            @AuthenticationPrincipal User principal,
-            @RequestParam("course_id") UUID courseId
-    ) {
-        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
-
-        List<User> users = userService.findAllByCourseId(courseId);
-
-        return ResponseEntity.ok(
-                users.stream()
-                        .map(DtoFactory::makeUserShortResponseDto)
-                        .toList()
-        );
-    }
-
-    @GetMapping("/course/not")
-    public ResponseEntity<List<UserShortResponseDto>> findUsersByCourseIdNot(
-            @AuthenticationPrincipal User principal,
-            @RequestParam("institution_id") UUID institutionId,
-            @RequestParam("course_id") UUID courseId
-    ) {
-        checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
-
-        List<User> users = userService.findAllByInstitutionIdNotInCourse(institutionId, courseId);
-
-        return ResponseEntity.ok(
-                users.stream()
-                        .map(DtoFactory::makeUserShortResponseDto)
-                        .toList()
-        );
-    }
-
-    @GetMapping("/institution")
-    public ResponseEntity<List<UserShortResponseDto>> findUsersByInstitutionId(
-            @AuthenticationPrincipal User principal,
-            @RequestParam("institution_id") UUID institutionId
-    ) {
-        checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
-
-        List<User> users = userService.findAllByInstitutionId(institutionId);
-
-        return ResponseEntity.ok(
-                users.stream()
-                        .map(DtoFactory::makeUserShortResponseDto)
-                        .toList()
-        );
-    }
-
+    )
     @DeleteMapping("/id")
     public ResponseEntity<?> deleteUserById(
             @AuthenticationPrincipal User principal,
             @RequestParam("user_id") UUID userId
     ) {
         User user = userService.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        String.format("Пользователя с id %s не существует", userId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Пользователя с указанным id не существует",
+                        String.format("Ошибка при удалении пользователя. Пользователя с id %s не существует", userId)
                 ));
 
         checkUserHasAccessToOtherOrElseThrow(principal, user, true, true);
@@ -304,14 +567,48 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
+    @Operation(
+            summary = "Удаление пользователя по email",
+            description = "Требуется роль ADMIN",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление пользователями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому пользователю"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Пользователя с указанным email не существует"
+                                        }
+                                    """)
+                    ))
+    }
+    )
     @DeleteMapping("/email")
     public ResponseEntity<?> deleteUserByEmail(
             @AuthenticationPrincipal User principal,
             @RequestParam("user_email") String email
     ) {
         User user = userService.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        String.format("Пользователя с email %s не существует", email)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Пользователя с указанным email не существует",
+                        String.format("Ошибка при удалении пользователя. Пользователя с email %s не существует", email)
                 ));
 
         checkUserHasAccessToOtherOrElseThrow(principal, user, true, true);
@@ -321,47 +618,6 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/activate-account")
-    public ResponseEntity<String> activateAccount(
-            @RequestParam("token") String accountActivationToken, @RequestParam("user_email") String userEmail
-    ){
-        User user = userService.findByEmail(userEmail)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Пользователь не найден",
-                        String.format("Ошибка активации аккаунта. Пользователь с %s email не найден", userEmail)
-                ));
-
-        User tokenUser = tokenService.findUserByToken(accountActivationToken)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Пользователь не найден",
-                        String.format("Ошибка активации аккаунта. Пользователь по токену %s не найден", accountActivationToken)
-                ));
-
-        if (!tokenUser.equals(user)) {
-            throw new TokenUserMismatchEx(
-                    "Данный токен принадлежит другому пользователю.",
-                    String.format("Ошибка активации аккаунта. Несовпадение: токен принадлежит пользователю %s." +
-                                    " Заявленный пользователь: %s",
-                            tokenUser.getEmail(), userEmail
-                    )
-            );
-        }
-
-        if (!jwtService.isTokenValid(accountActivationToken, TokenMode.ACCOUNT_ACTIVATION)) {
-            sendMailForAccountActivation(user);
-            throw new AccountActivationTokenRenewEx(
-                    "Время действия ссылки истекло. Вы получите новую ссылку на ваш email",
-                    String.format("Неуспешная активация аккаунта. account_activation_token пользователя %s истек. " +
-                            "Произошла выдача нового токена", userEmail)
-            );
-        }
-
-        userService.enableAndSave(user);
-
-        tokenService.revokeUserTokensByTokenModeIn(userEmail, List.of(TokenMode.ACCOUNT_ACTIVATION));
-
-        return ResponseEntity.ok("Вы успешно активировали свой аккаунт!");
-    }
 
     private void checkPrincipalIsAttachedToInstitutionOrElseThrow(User principal) {
         if (principal.getInstitution() == null) {
@@ -397,8 +653,8 @@ public class UserController {
     }
 
     private void checkPrincipalHasAccessToCourseOrElseThrow(
-            User principal, UUID courseId, boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent){
-        if(!accessManager.isUserHasAccessToCourse(principal, courseId, isNeedToBeCreator, isNeedToHaveHigherRoleThanStudent)){
+            User principal, UUID courseId, boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent) {
+        if (!accessManager.isUserHasAccessToCourse(principal, courseId, isNeedToBeCreator, isNeedToHaveHigherRoleThanStudent)) {
             throw new AccessDeniedEx(
                     String.format("Ошибка доступа. У вас нет доступа к курсу %s.", courseId),
                     String.format("Отказ в доступе к курсу. Пользователь %s не имеет доступа к курсу %s",
@@ -407,13 +663,13 @@ public class UserController {
         }
     }
 
-    private void sendMailForAccountActivation(User user){
+    private void sendMailForAccountActivation(User user) {
         String accActivationToken = jwtService.generateUserToken(
                 List.of(user.getRole().name()), user.getEmail(), TokenMode.ACCOUNT_ACTIVATION
         );
         tokenService.saveToken(accActivationToken, TokenType.BEARER, TokenMode.ACCOUNT_ACTIVATION, user);
 
-        emailService.sendMailForAccountActivation(user, accActivationToken);
+        authEmailService.sendMailForAccountActivation(user, accActivationToken);
     }
 
 }

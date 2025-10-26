@@ -11,14 +11,14 @@ import ru.antonov.oauth2_social.config.ApiError;
 
 @ControllerAdvice
 @Slf4j
-public class CustomExceptionHandler {
+public class AuthControllerExceptionHandler {
     @ExceptionHandler(BadTfaCodeEx.class)
     public ResponseEntity<ApiError> handleBadTfaCodeEx(BadTfaCodeEx ex){
         log.warn(ex.getDebugMessage());
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.UNAUTHORIZED)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
     }
@@ -29,13 +29,24 @@ public class CustomExceptionHandler {
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(TokenUserMismatchEx.class)
     public ResponseEntity<ApiError> handleTokenUserMismatchEx(TokenUserMismatchEx ex){
+        log.warn(ex.getDebugMessage());
+        ApiError info = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return ResponseEntity.badRequest().body(info);
+    }
+
+    @ExceptionHandler(AccountAlreadyEnabledEx.class)
+    public ResponseEntity<ApiError> handleAccountAlreadyEnabledEx(AccountAlreadyEnabledEx ex){
         log.warn(ex.getDebugMessage());
         ApiError info = ApiError
                 .builder()
@@ -73,7 +84,7 @@ public class CustomExceptionHandler {
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.UNAUTHORIZED)
-                .error("Аутентификация не пройдена. Адрес вашей эл. почты не подтвержден")
+                .message("Аутентификация не пройдена. Адрес вашей эл. почты не подтвержден")
                 .build();
         return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
     }
@@ -84,7 +95,7 @@ public class CustomExceptionHandler {
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .error("Пользователя с таким email не существует")
+                .message("Пользователя с таким email не существует")
                 .build();
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
@@ -95,7 +106,7 @@ public class CustomExceptionHandler {
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.FORBIDDEN)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
     }
@@ -106,7 +117,7 @@ public class CustomExceptionHandler {
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
@@ -141,7 +152,7 @@ public class CustomExceptionHandler {
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.UNAUTHORIZED)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
     }
@@ -164,7 +175,7 @@ public class CustomExceptionHandler {
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }

@@ -26,6 +26,8 @@ public class UserResponseDto {
 
     private Integer age;
 
+    private String password;
+
     private InstitutionShortResponseDto institution;
 
     private Role role;

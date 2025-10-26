@@ -29,7 +29,7 @@ public class Task {
     @JoinColumn(name = "course_id")
     private Course course;
 
-    @ManyToOne(optional = false)
+    @ManyToOne
     @JoinColumn(name = "user_id")
     private User creator;
 

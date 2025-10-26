@@ -42,15 +42,13 @@ public class User implements UserDetails {
 
     private Integer age;
 
-    @ManyToOne( optional = false)
+   // @ManyToOne( optional = false)
+    @ManyToOne
     @JoinColumn(name = "institution_id")
     private Institution institution;
 
     @OneToMany(mappedBy = "user", orphanRemoval = true)
     private Set<CourseUser> courseUsers;
-
-    @OneToMany(mappedBy = "user", orphanRemoval = true)
-    private Set<Task> tasks;
 
     @OneToMany(mappedBy = "user", orphanRemoval = true)
     private Set<Solution> solutions;

@@ -2,12 +2,18 @@ package ru.antonov.oauth2_social.user.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import ru.antonov.oauth2_social.user.entity.Role;
+
+import java.util.UUID;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class UserCreateRequestDto {
     @NotBlank(message = "поле surname не должно быть пустым")
     @Size(max = 30, message = "Длина surname не может превышать 30 символов")

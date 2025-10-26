@@ -52,7 +52,7 @@ public class GroupService {
             String debugMessage;
 
             if (root instanceof SQLException sqlEx && sqlEx.getMessage().toLowerCase().contains("unique")) {
-                message = String.format("Группа %s уже существует в этом институте", group.getName());
+                message = "Эта группа уже существует в этом институте";
                 debugMessage = String.format("Ошибка при добавлении группы. " +
                         "Группа %s уже существует в институте %s", group.getName(), group.getInstitution().getId());
             } else {

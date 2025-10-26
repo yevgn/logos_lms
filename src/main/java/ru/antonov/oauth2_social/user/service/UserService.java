@@ -35,7 +35,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final GroupService groupService;
     private final CsvParser csvParser;
-    private final PasswordEncoder passwordEncoder;
+//    private final PasswordEncoder passwordEncoder;
     private final PasswordGenerator passwordGenerator;
 
     private final Integer PASSWORD_LENGTH = 6;
@@ -147,9 +147,7 @@ public class UserService {
                             .isEnabled(false)
                             .tfaSecret(null)
                             .isTfaEnabled(false)
-                            .password(passwordEncoder.encode(
-                                    passwordGenerator.generateRawPassword(PASSWORD_LENGTH, PASSWORD_GEN_RULES))
-                            )
+                            .password("{noop}" + passwordGenerator.generateRawPassword(PASSWORD_LENGTH, PASSWORD_GEN_RULES))
                             .build();
                 })
                 .toList();

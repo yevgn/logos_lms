@@ -20,25 +20,11 @@ import java.util.Arrays;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class EmailService {
-    @Value("${spring.application.url.activate-account}")
-    private String activateAccountUrl;
+public class UserEmailService {
     @Value("${spring.application.sender-email}")
     private String senderEmail;
 
     private final JavaMailSender mailSender;
-
-    public void sendMailForAccountActivation(User user, String accountActivationToken){
-        String subject = "Активация аккаунта в Logos LMS";
-
-        String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
-                        "<p>Перейдите по ссылке, чтобы активировать ваш аккаунт. После активации вы сможете пользоваться " +
-                        "всеми услугами сервиса</p>" +
-                        "<p><a href=\"%s?token=%s&user_email=%s\">Подтвердить</a></p>",
-                user.getSurname(), user.getName(), user.getPatronymic(), activateAccountUrl, accountActivationToken, user.getEmail());
-
-        sendEmail(subject, htmlText, new String[]{user.getEmail()});
-    }
 
     private void sendEmail(String subject, String text, String[] sendTo) {
         MimeMessage message = mailSender.createMimeMessage();

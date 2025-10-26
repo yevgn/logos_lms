@@ -20,13 +20,16 @@ import java.util.Arrays;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class EmailService {
+public class AuthEmailService {
     @Value("${spring.application.url.reset-password}")
     private String resetPasswordUrl;
     @Value("${spring.application.url.reset-2fa}")
     private String resetTfaUrl;
+    @Value("${spring.application.url.activate-account}")
+    private String activateAccountUrl;
     @Value("${spring.application.sender-email}")
     private String senderEmail;
+
 
     private final JavaMailSender mailSender;
 
@@ -58,13 +61,29 @@ public class EmailService {
         }
     }
 
+    public void sendMailForAccountActivation(User user, String accountActivationToken){
+        String subject = "Активация аккаунта в Logos LMS";
+
+        String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
+                        "<p>Перейдите по ссылке, чтобы активировать ваш аккаунт. После активации вы сможете пользоваться " +
+                        "всеми услугами сервиса</p>" +
+                        "<p><a href=\"%s?account_activation_token=%s&user_email=%s\">Подтвердить</a></p>",
+                user.getSurname(), user.getName(),
+                user.getPatronymic() == null ? "" : user.getPatronymic(),
+                activateAccountUrl, accountActivationToken, user.getEmail());
+
+        sendEmail(subject, htmlText, new String[]{user.getEmail()});
+    }
+
     public void sendMailForPasswordReset(User user, String resetPasswordToken) {
         String subject = "Сброс пароля в Logos LMS";
 
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
                 "<p>Перейдите по ссылке, чтобы сбросить пароль:</p>" +
                 "<p><a href=\"%s?token=%s&user_email=%s\">Подтвердить</a></p>",
-                user.getSurname(), user.getName(), user.getPatronymic(), resetPasswordUrl, resetPasswordToken, user.getEmail());
+                user.getSurname(), user.getName(),
+                user.getPatronymic() == null ? "" : user.getPatronymic(),
+                resetPasswordUrl, resetPasswordToken, user.getEmail());
 
         sendEmail(subject, htmlText, new String[]{user.getEmail()});
     }
@@ -75,7 +94,9 @@ public class EmailService {
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
                         "<p>Перейдите по ссылке, чтобы сбросить 2FA секрет:</p>" +
                         "<p><a href=\"%s?token=%s&user_email=%s\">Подтвердить</a></p>",
-                user.getSurname(), user.getName(), user.getPatronymic(), resetTfaUrl, resetTfaToken, user.getEmail());
+                user.getSurname(), user.getName(),
+                user.getPatronymic() == null ? "" : user.getPatronymic(),
+                resetTfaUrl, resetTfaToken, user.getEmail());
 
         sendEmail(subject, htmlText, new String[]{user.getEmail()});
     }
@@ -85,7 +106,9 @@ public class EmailService {
 
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
                         "<p>Ваш 2FA секретный ключ был успешно изменен</p>",
-                user.getSurname(), user.getName(), user.getPatronymic());
+                user.getSurname(), user.getName(),
+                user.getPatronymic() == null ? "" : user.getPatronymic()
+        );
 
         sendEmail(subject, htmlText, new String[]{user.getEmail()});
     }
@@ -95,7 +118,9 @@ public class EmailService {
 
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
                         "<p>Пароль от вашей учетной записи был успешно изменен</p>",
-                user.getSurname(), user.getName(), user.getPatronymic());
+                user.getSurname(), user.getName(),
+                user.getPatronymic() == null ? "" : user.getPatronymic()
+        );
 
         sendEmail(subject, htmlText, new String[]{user.getEmail()});
     }
@@ -105,7 +130,9 @@ public class EmailService {
 
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
                         "<p>Двухфакторная аутентификация вашей учетной записи была успешно отключена</p>",
-                user.getSurname(), user.getName(), user.getPatronymic());
+                user.getSurname(), user.getName(),
+                user.getPatronymic() == null ? "" : user.getPatronymic()
+        );
 
         sendEmail(subject, htmlText, new String[]{user.getEmail()});
     }
@@ -115,7 +142,9 @@ public class EmailService {
 
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
                         "<p>Двухфакторная аутентификация вашей учетной записи была успешно активирована</p>",
-                user.getSurname(), user.getName(), user.getPatronymic());
+                user.getSurname(), user.getName(),
+                user.getPatronymic() == null ? "" : user.getPatronymic()
+        );
 
         sendEmail(subject, htmlText, new String[]{user.getEmail()});
     }

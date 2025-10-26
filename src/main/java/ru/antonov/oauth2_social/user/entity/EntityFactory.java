@@ -2,6 +2,7 @@ package ru.antonov.oauth2_social.user.entity;
 
 
 import ru.antonov.oauth2_social.user.dto.GroupCreateRequestDto;
+import ru.antonov.oauth2_social.user.dto.InstitutionCreateRequestDto;
 import ru.antonov.oauth2_social.user.dto.UserCreateRequestDto;
 
 public class EntityFactory {
@@ -22,6 +23,17 @@ public class EntityFactory {
                 .isEnabled(false)
                 .isTfaEnabled(false)
                 .tfaSecret(null)
+                .build();
+    }
+
+    public static Institution makeInstitutionEntity(InstitutionCreateRequestDto dto){
+        return Institution
+                .builder()
+                .type(dto.getInstitutionType())
+                .fullName(dto.getFullName())
+                .shortName(dto.getShortName())
+                .location(dto.getLocation())
+                .email(dto.getEmail())
                 .build();
     }
 

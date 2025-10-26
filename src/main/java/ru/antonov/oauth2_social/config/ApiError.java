@@ -1,5 +1,6 @@
 package ru.antonov.oauth2_social.config;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -11,5 +12,4 @@ import org.springframework.http.HttpStatus;
 public class ApiError {
     private HttpStatus status;
     private String message;
-    private String error;
 }

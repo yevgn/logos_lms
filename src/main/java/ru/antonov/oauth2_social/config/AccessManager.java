@@ -4,8 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import ru.antonov.oauth2_social.course.entity.Course;
 import ru.antonov.oauth2_social.course.entity.CourseUser;
 import ru.antonov.oauth2_social.course.entity.CourseUserKey;
+import ru.antonov.oauth2_social.course.repository.CourseRepository;
 import ru.antonov.oauth2_social.course.repository.CourseUserRepository;
 import ru.antonov.oauth2_social.user.entity.Role;
 import ru.antonov.oauth2_social.user.entity.User;
@@ -19,6 +21,7 @@ import java.util.UUID;
 @Slf4j
 public class AccessManager {
     private final CourseUserRepository courseUserRepository;
+    private final CourseRepository courseRepository;
 
     public boolean isUserHasAccessToOther(User userRequestedForAccess, User toAccessTo, boolean isNeedToHaveHigherPriority,
                                           boolean isNeedToBeInOneInstitution){
@@ -53,6 +56,21 @@ public class AccessManager {
 
     public boolean isUserHasAccessToCourse(
             User user, UUID courseId,  boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent){
+        Optional<Course> courseOpt = courseRepository.findById(courseId);
+        if(courseOpt.isEmpty()){
+            return false;
+        }
+
+        Course course = courseOpt.get();
+
+        if(user.getRole().equals(Role.ADMIN)){
+            Objects.requireNonNull(
+                    user.getInstitution(),
+                    "Ошибка при проверке isUserHasAccessToCourse() в AccessManager. institution у user must not be null"
+            );
+            return Objects.equals(user.getInstitution(), course.getInstitution());
+        }
+
         Optional<CourseUser> courseUserOpt = courseUserRepository.findById(
                 CourseUserKey
                         .builder()
@@ -60,6 +78,9 @@ public class AccessManager {
                         .courseId(courseId)
                         .build()
         );
+
+        // если юзер - админ, то только проверяем равенство его института институту курса
+        // если не админ, то проверяем наличие courseUser
 
         if(courseUserOpt.isEmpty()){
             return false;

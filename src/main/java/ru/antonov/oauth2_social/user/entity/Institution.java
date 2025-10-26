@@ -30,7 +30,7 @@ public class Institution {
     @Column(name = "full_name")
     private String fullName;
 
-    @Column(name = "full_name")
+    @Column(name = "short_NAME")
     private String shortName;
 
     private String location;
@@ -70,6 +70,6 @@ public class Institution {
                 : this.getClass();
         if (thisEffectiveClass != oEffectiveClass) return false;
         Institution institution = (Institution) o;
-        return getId() != null && Objects.equals(getId(), ((Institution) o).getId());
+        return getId() != null && Objects.equals(getId(), institution.getId());
     }
 }

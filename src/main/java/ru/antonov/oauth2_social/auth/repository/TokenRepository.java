@@ -22,13 +22,13 @@ public interface TokenRepository extends JpaRepository<Token, UUID> {
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
-    @Query(value = "UPDATE TokenEntity SET revoked = true, expired = true" +
+    @Query(value = "UPDATE Token SET revoked = true, expired = true" +
             " WHERE user.email = :email AND (tokenMode = 'ACCESS' OR tokenMode = 'REFRESH')")
     int revokeAccessAndRefreshTokensByUserEmail(String email);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
-    @Query(value = "UPDATE TokenEntity SET revoked = true, expired = true" +
+    @Query(value = "UPDATE Token SET revoked = true, expired = true" +
             " WHERE user.email = :email AND tokenMode = :tokenMode")
     int revokeAllByEmailAndTokenMode(String email, TokenMode tokenMode);
 

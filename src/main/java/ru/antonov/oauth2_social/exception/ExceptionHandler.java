@@ -1,6 +1,7 @@
 package ru.antonov.oauth2_social.exception;
 
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -10,7 +11,6 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -24,8 +24,8 @@ import java.util.List;
 
 @ControllerAdvice
 @Slf4j
-public class CustomExceptionHandler{
-    @ExceptionHandler(
+public class ExceptionHandler {
+    @org.springframework.web.bind.annotation.ExceptionHandler(
             {MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class,
             HttpMessageNotReadableException.class, NoResourceFoundException.class}
     )
@@ -34,40 +34,40 @@ public class CustomExceptionHandler{
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler(EntityNotFoundEx.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(EntityNotFoundEx.class)
     public ResponseEntity<ApiError> handleEntityNotFoundEx(EntityNotFoundEx ex){
         log.warn(ex.getDebugMessage());
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler(IOEx.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(IOEx.class)
     public ResponseEntity<ApiError> handleIOEx(IOEx ex){
         log.error(ex.getDebugMessage());
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    @ExceptionHandler(AccessDeniedEx.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(AccessDeniedEx.class)
     public ResponseEntity<ApiError> handlePrincipalNotAttachedToInstitutionEx(AccessDeniedEx ex){
         log.warn(ex.getDebugMessage());
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.FORBIDDEN)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
     }
@@ -84,35 +84,35 @@ public class CustomExceptionHandler{
 //        return ResponseEntity.status(HttpStatus.CONFLICT).body(apiError);
 //    }
 
-    @ExceptionHandler(DBConstraintViolationEx.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(DBConstraintViolationEx.class)
     public ResponseEntity<ApiError> handleConstraintViolationEx(DBConstraintViolationEx ex){
         log.warn(ex.getDebugMessage());
         ApiError apiError = ApiError
                 .builder()
                 .status(HttpStatus.CONFLICT)
-                .error(ex.getMessage())
+                .message(ex.getMessage())
                 .build();
         return ResponseEntity.status(HttpStatus.CONFLICT).body(apiError);
     }
 
-    @ExceptionHandler(NullPointerException.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(NullPointerException.class)
     public ResponseEntity<ApiError> handleNullPointerEx(NullPointerException ex){
         log.error(ex.getMessage());
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .error("Ошибка на сервере")
+                .message("Ошибка на сервере")
                 .build();
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgumentEx(IllegalArgumentException ex){
         log.error(ex.getMessage());
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .error("Ошибка на сервере")
+                .message("Ошибка на сервере")
                 .build();
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
@@ -141,7 +141,7 @@ public class CustomExceptionHandler{
 //        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error);
 //    }
 
-    @ExceptionHandler(MailSendEx.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(MailSendEx.class)
     public ResponseEntity<ApiError> handleMailSendException(MailSendEx ex){
         log.error(ex.getDebugMessage());
         ApiError error = ApiError
@@ -152,7 +152,7 @@ public class CustomExceptionHandler{
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 
-    @ExceptionHandler(MailAuthenticationEx.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(MailAuthenticationEx.class)
     public ResponseEntity<ApiError> handleMailAuthenticationEx(MailAuthenticationEx ex){
         log.error(ex.getDebugMessage());
         ApiError error = ApiError
@@ -163,7 +163,7 @@ public class CustomExceptionHandler{
         return ResponseEntity.internalServerError().body(error);
     }
 
-    @ExceptionHandler(MessagingEx.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(MessagingEx.class)
     public ResponseEntity<ApiError> handleMessagingEx(MessagingEx ex){
         log.error(ex.getDebugMessage());
         ApiError error = ApiError
@@ -185,7 +185,7 @@ public class CustomExceptionHandler{
 //        return ResponseEntity.internalServerError().body(error);
 //    }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidationExceptions(MethodArgumentNotValidException ex) {
         log.warn("Неуспешная валидация: ", ex);
         List<String> errors = new ArrayList<>();
@@ -196,26 +196,27 @@ public class CustomExceptionHandler{
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .error(errors.toString())
+                .message(errors.toString())
                 .build();
 
         return ResponseEntity.badRequest().body(error);
     }
 
-    @ExceptionHandler(HandlerMethodValidationException.class)
+    @org.springframework.web.bind.annotation.ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<ApiError> handleHandlerMethodValidationEx(HandlerMethodValidationException ex) {
         log.warn("Неуспешная валидация: ", ex);
         List<String> errors = new ArrayList<>();
 
-        ex.getParameterValidationResults().forEach(validationRes ->
-                validationRes.getResolvableErrors().forEach( error ->
-                        errors.add(error.getDefaultMessage())
-                ));
+        ex.getAllValidationResults()
+                .forEach(paramResult ->
+                        paramResult.getResolvableErrors()
+                                .forEach(err -> errors.add(err.getDefaultMessage()))
+                );
 
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .error(errors.toString())
+                .message(errors.toString())
                 .build();
 
         return ResponseEntity.badRequest().body(error);

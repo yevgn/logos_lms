@@ -13,7 +13,6 @@ import ru.antonov.oauth2_social.user.repository.UserRepository;
 @RequiredArgsConstructor
 public class Oauth2SocialApplication implements CommandLineRunner {
 	private final UserRepository userRepository;
-	//private final PasswordEncoder passwordEncoder;
 
 	public static void main(String[] args) {
 		SpringApplication.run(Oauth2SocialApplication.class, args);
@@ -21,17 +20,19 @@ public class Oauth2SocialApplication implements CommandLineRunner {
 
 	@Override
 	public void run(String... args) throws Exception {
-//		User user = User.builder()
-//				.age(21)
-//				.name("Евгений")
-//				.surname("Антонов")
-//				.patronymic("Федорович")
-//				.email("zhenya041010@gmail.com")
-//				.isTfaEnabled(false)
-//				.isEnabled(true)
-//				.role(Role.ADMIN)
-//				.password(passwordEncoder.encode("z20041010"))
-//				.build();
-//		userRepository.save(user);
+		if(!userRepository.existsByEmail("example@gmail.com")) {
+			User user = User.builder()
+					.age(21)
+					.name("Елена")
+					.surname("Фонталина")
+					.patronymic("Сергеевна")
+					.email("example@gmail.com")
+					.isTfaEnabled(false)
+					.isEnabled(true)
+					.role(Role.ADMIN)
+					.password("{noop}abcd12345678")
+					.build();
+			userRepository.save(user);
+		}
 	}
 }

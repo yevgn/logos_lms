@@ -58,6 +58,29 @@ public class CourseControllerExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(UserAmountForCourseLimitExceededEx.class)
+    public ResponseEntity<ApiError> handleUserAmountForCourseLimitExceededEx(UserAmountForCourseLimitExceededEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(CourseMaterialFileLimitExceededEx.class)
+    public ResponseEntity<ApiError> handleCourseMaterialFileLimitExceededEx(CourseMaterialFileLimitExceededEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+
     @ExceptionHandler(FileNameNotUniqueEx.class)
     public ResponseEntity<ApiError> handleFileNameNotUniqueEx(FileNameNotUniqueEx ex) {
         log.warn(ex.getDebugMessage());

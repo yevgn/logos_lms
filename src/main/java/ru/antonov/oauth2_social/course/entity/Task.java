@@ -18,7 +18,11 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "tasks")
+@Table(name = "tasks",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"title", "course_id"})
+        }
+)
 public class Task {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

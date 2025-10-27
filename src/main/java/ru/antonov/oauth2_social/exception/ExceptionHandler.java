@@ -39,6 +39,17 @@ public class ExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    @org.springframework.web.bind.annotation.ExceptionHandler(FileNotFoundEx.class)
+    public ResponseEntity<ApiError> handleFileNotFoundEx(FileNotFoundEx ex) {
+        log.warn(ex.getMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
     @org.springframework.web.bind.annotation.ExceptionHandler(EntityNotFoundEx.class)
     public ResponseEntity<ApiError> handleEntityNotFoundEx(EntityNotFoundEx ex){
         log.warn(ex.getDebugMessage());

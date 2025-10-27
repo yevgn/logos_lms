@@ -8,10 +8,7 @@ import ru.antonov.oauth2_social.user.entity.Institution;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Getter
 @Setter
@@ -55,6 +52,8 @@ public class Course {
         if(this.courseUsers != null) {
             this.courseUsers.addAll(courseUsers);
             courseUsers.forEach(cu -> cu.setCourse(this));
+        } else{
+            this.courseUsers = new HashSet<>(courseUsers);
         }
     }
 
@@ -62,6 +61,9 @@ public class Course {
         if(this.courseUsers != null) {
             this.courseUsers.add(courseUser);
            courseUser.setCourse(this);
+        } else{
+            this.courseUsers = new HashSet<>();
+            this.courseUsers.add(courseUser);
         }
     }
 
@@ -74,6 +76,9 @@ public class Course {
         if(this.courseMaterials != null){
             this.courseMaterials.add(courseMaterial);
             courseMaterial.setCourse(this);
+        } else{
+            this.courseMaterials = new HashSet<>();
+            this.courseMaterials.add(courseMaterial);
         }
     }
 

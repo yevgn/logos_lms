@@ -1,10 +1,20 @@
 package ru.antonov.oauth2_social.course.service;
 
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import ru.antonov.oauth2_social.course.repository.CourseUserRepository;
+import ru.antonov.oauth2_social.exception.IOEx;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 import java.util.UUID;
+import java.util.stream.Stream;
 
 @Component
 @RequiredArgsConstructor
@@ -15,41 +25,58 @@ public class CourseLimitCounter {
     private int maxUserAmountForCourse;
     @Value("${spring.application.course-limit-params.max-solution-file-amount-for-course}")
     private int maxSolutionFileAmountForCourse;
+    @Value("${spring.application.course-limit-params.max-file-amount-for-course-material}")
+    private int maxFileAmountForCourseMaterial;
+    @Value("${spring.application.file-storage.base-path}")
+    private String basePath;
 
-   // private final CourseService courseService;
-
-    private final String COURSE_DIR_TEMPLATE = "D:/courses/%s";
+    private final CourseUserRepository courseUserRepository;
 
     public boolean isTaskAndMaterialFileAmountExceedsLimit(UUID courseId, int fileAmountToUpload){
-        //return calculateFileAmountForCourse(courseId) + fileAmountToUpload > maxFileAmount;
-        return false;
-        // todo СДЕЛАТЬ
+        return calculateTaskAndMaterialFileAmountForCourse(courseId) + fileAmountToUpload
+                > maxTaskAndMaterialFileAmountForCourse;
     }
 
-    public boolean isUserAmountExceedsLimit(int newUsers, UUID courseId){
-        //return courseUserService.calcUserAmountForCourse(courseId) + newUsers > maxUserAmountForCourse;
-        return false;
-        // todo СДЕЛАТЬ
+    public boolean isFileAmountForCourseMaterialExceedsLimit(UUID courseId, UUID courseMaterialId, int fileAmountToUpload){
+        Path courseBase = Paths.get(basePath, "courses", courseId.toString());
+        Path materialsDir = courseBase.resolve("course_materials");
+        Path materialDir = materialsDir.resolve(courseMaterialId.toString());
+
+        long fileCount = countFiles(materialDir);
+
+        return fileCount + fileAmountToUpload > maxFileAmountForCourseMaterial;
     }
 
-    public Long calculateFileAmountForCourse(UUID courseId){
-//        String courseDir = String.format(COURSE_DIR_TEMPLATE, courseId);
-//        try (Stream<Path> paths = Files.walk(Paths.get(courseDir))) {
-//            return paths
-//                    .filter( p ->
-//                            Files.isRegularFile(p) && (p.getFileName().startsWith("st_") || p.getFileName().startsWith("t_")
-//                                    || p.getFileName().startsWith("p_")) )
-//                    .count();
-//        } catch (IOException ex){
-//
-//            throw new InternalServerErrorEx("Ошибка на сервере");
-//        }
-        // todo СДЕЛАТЬ
-        return 0L;
+    public Long calculateTaskAndMaterialFileAmountForCourse(UUID courseId){
+        Path courseBase = Paths.get(basePath, "courses", courseId.toString());
+        Path materialsDir = courseBase.resolve("course_materials");
+        Path tasksDir = courseBase.resolve("tasks");
+
+        long courseMaterialFileCount = countFiles(materialsDir);
+        long taskFileCount = countFiles(tasksDir);
+
+        return courseMaterialFileCount + taskFileCount;
     }
 
-    public Long calculateFreeStorageSpaceLeft(UUID courseId){
-        // todo СДЕЛАТЬ
-        return 0L;
+    private long countFiles(Path dir) {
+        if (!Files.exists(dir)) {
+            return 0L;
+        }
+
+        try (Stream<Path> files = Files.walk(dir)) {
+            return files
+                    .filter(Files::isRegularFile)
+                    .count();
+        } catch (IOException ex) {
+            throw new IOEx(
+                    "Ошибка на сервере",
+                    "Ошибка при подсчете файлов"
+            );
+        }
+    }
+
+    public boolean isUserAmountForCourseExceedsLimit(int newUsers, UUID courseId) throws EntityNotFoundException {
+        int courseUserCount = courseUserRepository.getUserCountForCourseByCourseId(courseId);
+        return newUsers + courseUserCount > maxUserAmountForCourse;
     }
 }

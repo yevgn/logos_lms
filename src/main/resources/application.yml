@@ -24,9 +24,9 @@ spring:
             user-name-attribute: id
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/logos
-    username: postgres
-    password: root
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password:  ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -35,7 +35,7 @@ spring:
        dialect: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
     hibernate:
-      ddl-auto: validate
+      ddl-auto: create
 
   application:
     name: logos-lms-service
@@ -56,11 +56,12 @@ spring:
       get-course-info: front-url
     sender-email: yvgnantnv@yandex.ru
     course-limit-params:
+        max-file-amount-for-course-material: 20
         max-task-and-material-file-amount-for-course: 200
         max-solution-file-amount-for-course: 4000
-        max-user-amount-for-course: 100
+        max-user-amount-for-course: 101
     file-storage:
-      base-path: D:/logos-lms
+      base-path: /logos-data
 
   servlet:
     multipart:

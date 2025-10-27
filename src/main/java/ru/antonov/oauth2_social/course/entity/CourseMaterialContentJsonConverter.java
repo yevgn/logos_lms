@@ -8,16 +8,14 @@ import ru.antonov.oauth2_social.course.exception.JsonSerializationEx;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
-public class CourseMaterialContentJsonConverter implements AttributeConverter<List<CourseMaterialContent>, String> {
+public class CourseMaterialContentJsonConverter implements AttributeConverter<List<Content>, String> {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
-    public String convertToDatabaseColumn(List<CourseMaterialContent> attribute) {
+    public String convertToDatabaseColumn(List<Content> attribute) {
         if (attribute == null || attribute.isEmpty()) {
             return "[]";
         }
@@ -32,12 +30,12 @@ public class CourseMaterialContentJsonConverter implements AttributeConverter<Li
     }
 
     @Override
-    public List<CourseMaterialContent> convertToEntityAttribute(String dbData) {
+    public List<Content> convertToEntityAttribute(String dbData) {
         if (dbData == null || dbData.isBlank()) {
             return new ArrayList<>();
         }
         try {
-            return mapper.readValue(dbData, new TypeReference<List<CourseMaterialContent>>() {});
+            return mapper.readValue(dbData, new TypeReference<List<Content>>() {});
         } catch (IOException e) {
             throw new JsonSerializationEx(
                     "Ошибка на сервере",

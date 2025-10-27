@@ -129,6 +129,10 @@ public class SecurityConfig {
                                 .hasRole(Role.ADMIN.name())
                                 .requestMatchers(HttpMethod.POST, "/courses/*/materials")
                                 .hasRole(Role.TUTOR.name())
+                                .requestMatchers(HttpMethod.DELETE, "/courses/*/materials")
+                                .hasRole(Role.TUTOR.name())
+                                .requestMatchers(HttpMethod.PATCH, "/courses/*/materials")
+                                .hasRole(Role.TUTOR.name())
 
                                 .requestMatchers(WHITE_LIST_URL)
                                 .permitAll()

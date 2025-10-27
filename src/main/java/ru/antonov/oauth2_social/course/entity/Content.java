@@ -9,7 +9,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @NoArgsConstructor
-public class CourseMaterialContent {
+public class Content {
     private UUID id;
     private String originalFileName;
     private String path;

@@ -43,7 +43,7 @@ public class User implements UserDetails {
     private Integer age;
 
    // @ManyToOne( optional = false)
-    @ManyToOne
+    @ManyToOne(optional = true)
     @JoinColumn(name = "institution_id")
     private Institution institution;
 

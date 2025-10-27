@@ -1,35 +1,52 @@
 package ru.antonov.oauth2_social.course.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.data.repository.query.Param;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import ru.antonov.oauth2_social.config.AccessManager;
 import ru.antonov.oauth2_social.course.dto.*;
 
+import ru.antonov.oauth2_social.course.entity.CourseMaterial;
+import ru.antonov.oauth2_social.course.entity.Content;
 import ru.antonov.oauth2_social.course.service.CourseService;
 
 import ru.antonov.oauth2_social.exception.AccessDeniedEx;
+import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
+import ru.antonov.oauth2_social.exception.FileNotFoundEx;
+import ru.antonov.oauth2_social.exception.IOEx;
 import ru.antonov.oauth2_social.user.dto.DtoFactory;
 import ru.antonov.oauth2_social.user.dto.UserShortResponseDto;
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.user.service.UserService;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @RestController
 @RequestMapping("/courses")
@@ -49,10 +66,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -63,7 +80,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -74,7 +91,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "409",
                     description = "Дублирующиеся данные",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -85,7 +102,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "500",
                     description = "Ошибка при отправке сообщения о добавлении пользователя в курс на SMTP-сервер",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -100,7 +117,7 @@ public class CourseController {
     public ResponseEntity<CourseResponseDto> addCourse(
             @AuthenticationPrincipal User principal,
             @Valid @RequestBody CourseCreateWithUserIdListRequestDto request
-    ){
+    ) {
         checkPrincipalIsAttachedToInstitutionOrElseThrow(principal);
 
         return ResponseEntity.ok(courseService.save(request, principal));
@@ -114,10 +131,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -128,7 +145,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -139,7 +156,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "409",
                     description = "Дублирующиеся данные",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -150,7 +167,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "500",
                     description = "Ошибка при отправке сообщения о добавлении пользователя в курс на SMTP-сервер",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -165,7 +182,7 @@ public class CourseController {
     public ResponseEntity<CourseResponseDto> addCourse(
             @AuthenticationPrincipal User principal,
             @RequestBody CourseCreateWithGroupIdListRequestDto request
-    ){
+    ) {
         checkPrincipalIsAttachedToInstitutionOrElseThrow(principal);
 
         return ResponseEntity.ok(courseService.save(request, principal));
@@ -179,10 +196,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -193,7 +210,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -204,7 +221,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "409",
                     description = "Дублирующиеся данные",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -224,7 +241,7 @@ public class CourseController {
             @NotBlank(message = "Поле new_name не может отсутствовать")
             @Size(min = 3, max = 255, message = "Длина поля new_name должна быть больше 2 и не превышать 255 символов")
             String newName
-    ){
+    ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, true, true);
         courseService.changeCourse(courseId, newName);
 
@@ -239,10 +256,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -253,7 +270,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -268,7 +285,7 @@ public class CourseController {
     public ResponseEntity<?> deleteCourse(
             @AuthenticationPrincipal User principal,
             @RequestParam("course_id") UUID courseId
-    ){
+    ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, true, true);
         courseService.deleteById(courseId);
 
@@ -283,10 +300,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -297,7 +314,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -308,7 +325,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "500",
                     description = "Ошибка при отправке сообщения о добавлении пользователя в курс на SMTP-сервер",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -324,7 +341,7 @@ public class CourseController {
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
             @RequestBody List<UUID> userIdList
-    ){
+    ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
         return ResponseEntity.ok(courseService.addUsersToCourseByUserIdList(courseId, userIdList, principal));
@@ -338,10 +355,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -352,7 +369,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -363,7 +380,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "500",
                     description = "Ошибка при отправке сообщения о добавлении пользователя в курс на SMTP-сервер",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -379,7 +396,7 @@ public class CourseController {
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
             @RequestBody List<UUID> groupIdList
-    ){
+    ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
         return ResponseEntity.ok(courseService.addUsersToCourseByGroupIdList(courseId, groupIdList, principal));
@@ -393,10 +410,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -407,7 +424,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -423,7 +440,7 @@ public class CourseController {
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
             @RequestBody List<UUID> userIdList
-    ){
+    ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
         courseService.removeUsersFromCourseByUserIdList(courseId, userIdList);
@@ -438,10 +455,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -452,7 +469,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -467,7 +484,7 @@ public class CourseController {
     public ResponseEntity<CourseResponseDto> getCourseInfo(
             @AuthenticationPrincipal User principal,
             @RequestParam("course_id") UUID courseId
-    ){
+    ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
 
         return ResponseEntity.ok(courseService.getCourseInfoById(principal, courseId));
@@ -481,10 +498,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -495,7 +512,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -510,7 +527,7 @@ public class CourseController {
     public ResponseEntity<List<CourseResponseDto>> getCoursesByInstitutionId(
             @AuthenticationPrincipal User principal,
             @RequestParam("institution_id") UUID institutionId
-    ){
+    ) {
         checkPrincipalHasAccessToInstitutionOrElseThrow(principal, institutionId);
 
         return ResponseEntity.ok(courseService.findCoursesByInstitutionId(principal, institutionId));
@@ -525,10 +542,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -542,7 +559,7 @@ public class CourseController {
     @GetMapping("/user")
     public ResponseEntity<List<CourseResponseDto>> getCoursesByUserId(
             @AuthenticationPrincipal User principal
-    ){
+    ) {
         return ResponseEntity.ok(courseService.findCoursesByUser(principal));
     }
 
@@ -554,10 +571,10 @@ public class CourseController {
     @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -568,18 +585,18 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
                                           "status" : "400",
-                                          "message": "Неправильный формат UUID для параметра institution_id"
+                                          "message": "Неправильный формат UUID для параметра course_id"
                                         }
                                     """)
                     )),
             @ApiResponse(responseCode = "500",
                     description = "Ошибка при сохранении файлов на диск",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -590,38 +607,166 @@ public class CourseController {
                     ))
     }
     )
-    @PostMapping(value = "/{courseId}/materials", consumes = "multipart/form-data" )
+    @PostMapping(value = "/{courseId}/materials", consumes = "multipart/form-data")
     public ResponseEntity<CourseMaterialResponseDto> addCourseMaterialsToCourse(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
             @Valid @ModelAttribute CourseMaterialCreateRequestDto request
-    ){
+    ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
         return ResponseEntity.ok(courseService.saveCourseMaterial(principal, courseId, request));
     }
 
+    @Operation(
+            summary = "Удаление учебноно материала по id",
+            description = "Требуется роль TUTOR. Удалить учебный материал может только создатель курса",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление курсами")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. У вас нет доступа к этому курсу"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Ошибка. Учебный материал не найден"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "500",
+                    description = "Ошибка при удалении файлов с диска",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "500",
+                                          "message": "Ошибка на сервере"
+                                        }
+                                    """)
+                    ))
+    }
+    )
     @DeleteMapping("/{courseId}/materials")
-    public ResponseEntity<?> deleteCourseMaterialById(
+    public ResponseEntity<?> deleteCourseMaterial(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
-            @RequestParam("course_material_id") UUID id
-    ){
-        // todo УДАЛИТЬ
+            @RequestParam("course_material_id") UUID courseMaterialId
+    ) {
+        CourseMaterial courseMaterial = courseService.findCourseMaterialById(courseMaterialId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Учебный материал не найден",
+                        String.format("Ошибка при удалении учебного материала пользователем %s. " +
+                                        "Учебного материала с id %s не существует",
+                                SecurityContextHolder.getContext().getAuthentication().getName(),
+                                courseMaterialId
+                        )
+                ));
+
+        checkPrincipalHasAccessToCourseOrElseThrow(
+                principal, courseMaterial.getCourse().getId(), true, true
+        );
+
+        courseService.deleteCourseMaterial(courseMaterial);
         return ResponseEntity.ok().build();
     }
 
     @Operation(
-            summary = "Получение информации о пользователях по id курса",
+            summary = "Обновление учебноно материала по id",
+            description = "Требуется роль TUTOR. Обновить материал может только тот преподаватель, который его выложил",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    @Tag(name = "Управление пользователями")
+    @Tag(name = "Управление курсами")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не являетесь автором этого учебного материала"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Ошибка. Учебный материал не найден"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "500",
+                    description = "Ошибка при записи файлов/удалении файлов на диск/с диска",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "500",
+                                          "message": "Ошибка на сервере"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @PatchMapping(value = "/{courseId}/materials", consumes = "multipart/form-data")
+    public ResponseEntity<CourseMaterialResponseDto> updateCourseMaterial(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID courseId,
+            @RequestParam("course_material_id") UUID courseMaterialId,
+            @Valid @ModelAttribute CourseMaterialUpdateRequestDto request
+    ) {
+        CourseMaterial courseMaterial = courseService.findCourseMaterialById(courseMaterialId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Учебный материал не найден",
+                        String.format("Ошибка при обновлении учебного материала пользователем %s. " +
+                                        "Учебного материала с id %s не существует",
+                                SecurityContextHolder.getContext().getAuthentication().getName(),
+                                courseMaterialId
+                        )
+                ));
+
+        // должен обновлять только автор задания
+        checkPrincipalIsCourseMaterialAuthorOrElseThrow(principal, courseMaterial);
+
+        // проверка на доступ к курсу
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
+
+        return ResponseEntity.ok(courseService.updateCourseMaterial(principal, courseMaterial, request));
+    }
+
+    @Operation(
+            summary = "Получение списка учебных материалов по id курса",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление курсами")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -632,7 +777,251 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Ошибка. Курс не найден"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @GetMapping("/{courseId}/materials")
+    public ResponseEntity<List<CourseMaterialResponseDto>> findCourseMaterialsByCourseId(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID courseId
+    ) {
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
+
+        return ResponseEntity.ok(courseService.findAllCourseMaterialsByCourseId(principal, courseId));
+    }
+
+    @Operation(
+            summary = "Просмотр/скачивание файла по fileId",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Просмотр/скачивание файлов")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому курсу"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Ошибка. Учебный материал не найден"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "500",
+                    description = "Ошибка на сервере при поиске файла",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "500",
+                                          "message": "Ошибка на сервере"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @GetMapping("/{courseId}/materials/{materialId}/files/{fileId}/download")
+    public ResponseEntity<Resource> downloadCourseMaterialFile(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID courseId,
+            @PathVariable UUID materialId,
+            @PathVariable UUID fileId,
+            @Param(value = "Флаг. Если download = true, то файл будет скачан, если false - в режиме просмотра")
+            @RequestParam(required = false, defaultValue = "false") boolean download
+    ) {
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
+
+        CourseMaterial courseMaterial = courseService.findCourseMaterialById(materialId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Учебный материал не найден",
+                        String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
+                                        "Учебного материала с id %s не существует",
+                                SecurityContextHolder.getContext().getAuthentication().getName(),
+                                materialId
+                        )
+                ));
+
+        if (!courseId.equals(courseMaterial.getCourse().getId())) {
+            throw new EntityNotFoundEx(
+                    "Ошибка. В данном курсе нет такого учебного материала",
+                    String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
+                                    "в курсе %s не существует учебного материала %s",
+                            SecurityContextHolder.getContext().getAuthentication().getName(),
+                            courseId, materialId
+                    )
+            );
+        }
+
+        Content file = courseMaterial.getContent()
+                .stream()
+                .filter(c -> c.getId().equals(fileId))
+                .findFirst()
+                .orElseThrow(() -> new FileNotFoundEx(
+                                "Ошибка. Такого файла не существует",
+                                String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
+                                                "В учебном материале %s не существует файла %s",
+                                        SecurityContextHolder.getContext().getAuthentication().getName(),
+                                        materialId,
+                                        fileId
+                                )
+                        )
+                );
+
+        Resource resource = courseService.getCourseMaterialFile(file.getPath());
+
+        String disposition = download ? "attachment" : "inline";
+        String contentType = courseService.resolveContentType(file.getOriginalFileName());
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        disposition + "; filename=\"" + file.getOriginalFileName() + "\""
+                )
+                .body(resource);
+    }
+
+    @Operation(
+            summary = "Скачивание архива файлов по id учебного материала",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Просмотр/скачивание файлов")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому курсу"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Ошибка. Учебный материал не найден"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "500",
+                    description = "Ошибка на сервере при архивировании файлов",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "500",
+                                          "message": "Ошибка на сервере"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @GetMapping("/{courseId}/materials/{materialId}/download")
+    public void downloadCourseMaterialFilesZip(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID courseId,
+            @PathVariable UUID materialId,
+            HttpServletResponse response
+    ) {
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
+
+        CourseMaterial courseMaterial = courseService.findCourseMaterialById(materialId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Учебный материал не найден",
+                        String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
+                                        "Учебного материала с id %s не существует",
+                                SecurityContextHolder.getContext().getAuthentication().getName(),
+                                materialId
+                        )
+                ));
+
+        if (!courseId.equals(courseMaterial.getCourse().getId())) {
+            throw new EntityNotFoundEx(
+                    "Ошибка. В данном курсе нет такого учебного материала",
+                    String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
+                                    "в курсе %s не существует учебного материала %s",
+                            SecurityContextHolder.getContext().getAuthentication().getName(),
+                            courseId, materialId
+                    )
+            );
+        }
+
+        List<Content> files = courseMaterial.getContent();
+
+        response.setContentType("application/zip");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + courseMaterial.getTopic() + "\"");
+
+        try (ZipOutputStream zipOut = new ZipOutputStream(response.getOutputStream())) {
+            for (Content file : files) {
+                Path filePath = Paths.get(file.getPath());
+                Resource resource = new UrlResource(filePath.toUri());
+
+                if (resource.exists() && resource.isReadable()) {
+                    zipOut.putNextEntry(new ZipEntry(file.getOriginalFileName()));
+                    Files.copy(filePath, zipOut);
+                    zipOut.closeEntry();
+                }
+            }
+        } catch (IOException ex) {
+            throw new IOEx(
+                    "Ошибка на сервере",
+                    String.format("Ошибка при архивировании файлов. Ошибка при архивировании файлов пользователем %s" +
+                            " для учебного материала %s", principal.getId(), courseMaterial.getId())
+            );
+        }
+    }
+
+    @Operation(
+            summary = "Получение информации о пользователях по id курса",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление пользователями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому курсу"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -661,16 +1050,16 @@ public class CourseController {
 
     @Operation(
             summary = "Получение информации о пользователях из учебного заведения с указанным id, " +
-            "которые не состоят в курсе с указанным id",
+                    "которые не состоят в курсе с указанным id",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление пользователями")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
             @ApiResponse(responseCode = "403",
                     description = "Нет доступа",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -681,7 +1070,7 @@ public class CourseController {
                     )),
             @ApiResponse(responseCode = "400",
                     description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
@@ -711,12 +1100,24 @@ public class CourseController {
     }
 
     private void checkPrincipalHasAccessToCourseOrElseThrow(
-            User principal, UUID courseId, boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent){
-        if(!accessManager.isUserHasAccessToCourse(principal, courseId, isNeedToBeCreator, isNeedToHaveHigherRoleThanStudent)){
+            User principal, UUID courseId, boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent) {
+        if (!accessManager.isUserHasAccessToCourse(principal, courseId, isNeedToBeCreator, isNeedToHaveHigherRoleThanStudent)) {
             throw new AccessDeniedEx(
-                    String.format("Ошибка доступа. У вас нет доступа к курсу %s.", courseId),
+                    "Ошибка доступа. У вас нет доступа к этому курсу",
                     String.format("Отказ в доступе к курсу. Пользователь %s не имеет доступа к курсу %s",
                             principal.getEmail(), courseId)
+            );
+        }
+    }
+
+    private void checkPrincipalIsCourseMaterialAuthorOrElseThrow(User principal, CourseMaterial courseMaterial) {
+        if (!principal.equals(courseMaterial.getUser())) {
+            throw new AccessDeniedEx(
+                    "Ошибка доступа. Вы не являетесь автором этого учебного материала",
+                    String.format(
+                            "Ошибка в доступе к учебному материалу. Пользователь %s не является автором материала %S",
+                            principal.getId(), courseMaterial.getId()
+                    )
             );
         }
     }

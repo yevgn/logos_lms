@@ -3,15 +3,16 @@ package ru.antonov.oauth2_social.course.validation;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import org.springframework.web.multipart.MultipartFile;
-import ru.antonov.oauth2_social.course.dto.CourseMaterialCreateRequestDto;
+
+import ru.antonov.oauth2_social.course.dto.HasContentFiles;
 
 import java.util.HashSet;
 import java.util.Set;
 
-public class UniqueFileNamesValidator implements ConstraintValidator<UniqueFileNames, CourseMaterialCreateRequestDto> {
+public class UniqueFileNamesValidator implements ConstraintValidator<UniqueFileNames, HasContentFiles> {
 
     @Override
-    public boolean isValid(CourseMaterialCreateRequestDto dto, ConstraintValidatorContext context) {
+    public boolean isValid(HasContentFiles dto, ConstraintValidatorContext context) {
         if (dto.getContent() == null) {
             return true;
         }

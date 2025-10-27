@@ -22,5 +22,6 @@ public class CourseCreateWithUserIdListRequestDto {
     private String name;
 
     @JsonProperty("user_id_list")
+    @Size(max = 100, message = "Максимальный размер поля user_id_list - 100")
     private List<UUID> userIdList;
 }

@@ -6,10 +6,7 @@ import org.hibernate.proxy.HibernateProxy;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
 @Getter
 @Setter
@@ -43,10 +40,18 @@ public class CourseMaterial {
 
     @Column(name = "course_material_content", columnDefinition = "varchar")
     @Convert(converter = CourseMaterialContentJsonConverter.class)
-    private List<CourseMaterialContent> courseMaterialContent;
+    private List<Content> content;
 
     // ТИПА ОБЩЕЕ НАЗВАНИЕ (ЛЕКЦИИ, СЕМИНАР И Т.Д)
     private String topic;
+
+    public void addCourseMaterialContent(List<Content> newContent){
+        if(this.content != null){
+            this.content.addAll(newContent);
+        } else{
+            content = new ArrayList<>(newContent);
+        }
+    }
 
     @Override
     public final int hashCode() {
@@ -80,7 +85,7 @@ public class CourseMaterial {
                 ", user_id=" + user.getId() +
                 ", publishedAt=" + publishedAt +
                 ", lastChangedAt=" + lastChangedAt +
-                ", courseMaterialContent=" + courseMaterialContent +
+                ", courseMaterialContent=" + content +
                 ", topic='" + topic + '\'' +
                 '}';
     }

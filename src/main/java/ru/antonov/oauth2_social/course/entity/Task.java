@@ -7,10 +7,7 @@ import ru.antonov.oauth2_social.course.exception.IllegalTaskDeadlineEx;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Getter
 @Setter
@@ -56,7 +53,7 @@ public class Task {
 
     @Column(name = "task_content", columnDefinition = "varchar")
     @Convert(converter = TaskContentJsonConverter.class)
-    private Map<String, Object> taskContent;
+    private List<Content> content;
 
     @OneToMany(
             mappedBy = "task",
@@ -125,7 +122,7 @@ public class Task {
                 ", toSubmitAt=" + toSubmitAt +
                 ", description='" + description + '\'' +
                 ", isForEveryone=" + isForEveryone +
-                ", taskContent=" + taskContent +
+                ", content=" + content +
                 ", isAssessed=" + isAssessed +
                 '}';
     }

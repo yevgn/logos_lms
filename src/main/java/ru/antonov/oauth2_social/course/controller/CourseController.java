@@ -678,9 +678,7 @@ public class CourseController {
                         )
                 ));
 
-        checkPrincipalHasAccessToCourseOrElseThrow(
-                principal, courseMaterial.getCourse().getId(), true, true
-        );
+        checkPrincipalIsCourseMaterialAuthorOrCourseCreatorOrElseThrow(principal, courseMaterial);
 
         courseService.deleteCourseMaterial(courseMaterial);
         return ResponseEntity.ok().build();
@@ -747,11 +745,7 @@ public class CourseController {
                         )
                 ));
 
-        // должен обновлять только автор задания
-        checkPrincipalIsCourseMaterialAuthorOrElseThrow(principal, courseMaterial);
-
-        // проверка на доступ к курсу
-        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
+        checkPrincipalIsCourseMaterialAuthorOrCourseCreatorOrElseThrow(principal, courseMaterial);
 
         return ResponseEntity.ok(courseService.updateCourseMaterial(principal, courseMaterial, request));
     }
@@ -1106,6 +1100,25 @@ public class CourseController {
                     "Ошибка доступа. У вас нет доступа к этому курсу",
                     String.format("Отказ в доступе к курсу. Пользователь %s не имеет доступа к курсу %s",
                             principal.getEmail(), courseId)
+            );
+        }
+    }
+
+    private void checkPrincipalIsCourseMaterialAuthorOrCourseCreatorOrElseThrow(
+            User principal, CourseMaterial courseMaterial
+    ) {
+        if (!(principal.equals(courseMaterial.getUser()) ||
+                accessManager.isUserHasAccessToCourse(
+                        principal, courseMaterial.getCourse().getId(), true, true)
+        )
+        ) {
+            throw new AccessDeniedEx(
+                    "Ошибка доступа. Вы не являетесь создателем курса или автором учебного материала",
+                    String.format(
+                            "Ошибка доступа. Пользователь %s не является создателем курса %s или" +
+                                    " автором материала %s",
+                            principal.getId(), courseMaterial.getCourse().getId(), courseMaterial.getId()
+                    )
             );
         }
     }

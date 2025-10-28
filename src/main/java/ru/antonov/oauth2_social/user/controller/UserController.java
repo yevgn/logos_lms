@@ -58,10 +58,8 @@ public class UserController {
     private final GroupService groupService;
     private final TokenService tokenService;
     private final AuthEmailService authEmailService;
-    private final CourseService courseService;
     private final JwtService jwtService;
     private final AccessManager accessManager;
-    // private final PasswordEncoder passwordEncoder;
     private final PasswordGenerator passwordGenerator;
 
     private final Integer PASSWORD_LENGTH = 6;

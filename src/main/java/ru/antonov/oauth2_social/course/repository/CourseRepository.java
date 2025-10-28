@@ -12,5 +12,4 @@ import java.util.UUID;
 public interface CourseRepository extends JpaRepository<Course, UUID> {
     @Query(value = "SELECT c FROM Course c WHERE c.institution.id = :institutionId")
     List<Course> findAllByInstitutionId(UUID institutionId);
-
 }

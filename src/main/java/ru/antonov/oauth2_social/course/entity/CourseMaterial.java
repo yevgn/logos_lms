@@ -85,7 +85,7 @@ public class CourseMaterial {
                 ", user_id=" + user.getId() +
                 ", publishedAt=" + publishedAt +
                 ", lastChangedAt=" + lastChangedAt +
-                ", courseMaterialContent=" + content +
+                ", content=" + content +
                 ", topic='" + topic + '\'' +
                 '}';
     }

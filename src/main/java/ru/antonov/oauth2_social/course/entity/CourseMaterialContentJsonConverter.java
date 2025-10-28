@@ -39,7 +39,8 @@ public class CourseMaterialContentJsonConverter implements AttributeConverter<Li
         } catch (IOException e) {
             throw new JsonSerializationEx(
                     "Ошибка на сервере",
-                    "Ошибка при преобразовании courseMaterialContent в поле БД в сущности CourseMaterial"
+                    "Ошибка при преобразовании поля БД courseMaterialContent " +
+                            "в сущности CourseMaterial"
             );
         }
     }

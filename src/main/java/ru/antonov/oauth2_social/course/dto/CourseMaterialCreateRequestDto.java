@@ -8,7 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.web.multipart.MultipartFile;
-import ru.antonov.oauth2_social.course.validation.UniqueFileNames;
+import ru.antonov.oauth2_social.common.HasContentFiles;
+import ru.antonov.oauth2_social.common.validation.UniqueFileNames;
 
 import java.util.List;
 
@@ -17,7 +18,7 @@ import java.util.List;
 @UniqueFileNames
 @NoArgsConstructor
 @AllArgsConstructor
-public class CourseMaterialCreateRequestDto implements HasContentFiles{
+public class CourseMaterialCreateRequestDto implements HasContentFiles {
     @NotBlank(message = "Поле topic не может отсутствовать или быть пустым")
     @Size(max = 100, message = "максимальная длина поля topic - 100")
     private String topic;

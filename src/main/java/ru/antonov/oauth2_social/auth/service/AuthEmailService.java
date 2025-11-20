@@ -9,7 +9,13 @@ import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import ru.antonov.oauth2_social.config.MailSendFailure;
+import ru.antonov.oauth2_social.config.MailSendFailureRepository;
 import ru.antonov.oauth2_social.exception.MailAuthenticationEx;
 import ru.antonov.oauth2_social.exception.MailSendEx;
 import ru.antonov.oauth2_social.exception.MessagingEx;
@@ -30,8 +36,9 @@ public class AuthEmailService {
     @Value("${spring.application.sender-email}")
     private String senderEmail;
 
-
     private final JavaMailSender mailSender;
+
+    private final MailSendFailureRepository mailSendFailureRepository;
 
     private void sendEmail(String subject, String text, String[] sendTo) {
         MimeMessage message = mailSender.createMimeMessage();
@@ -61,6 +68,11 @@ public class AuthEmailService {
         }
     }
 
+    @Async
+    @Retryable(
+            retryFor = {MailSendException.class, MailAuthenticationException.class, MessagingException.class},
+            backoff = @Backoff(delay = 5000, multiplier = 2)
+    )
     public void sendMailForAccountActivation(User user, String accountActivationToken){
         String subject = "Активация аккаунта в Logos LMS";
 
@@ -147,5 +159,19 @@ public class AuthEmailService {
         );
 
         sendEmail(subject, htmlText, new String[]{user.getEmail()});
+    }
+
+    @Recover
+    public void recoverFromMailError(Exception ex, User user, String accountActivationToken) {
+        log.error("Ошибка рассылки писем с ссылкой для подтверждения аккаунта. " +
+                "Не удалось отправить письмо пользователю {} после всех попыток: {}", user.getEmail(), ex.getMessage());
+
+        mailSendFailureRepository.save(
+                MailSendFailure
+                        .builder()
+                        .user(user)
+                        .failureDescription("Не удалось отправить письмо с ссылкой для подтверждения аккаунта")
+                        .build()
+        );
     }
 }

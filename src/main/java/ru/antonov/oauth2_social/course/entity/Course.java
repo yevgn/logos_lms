@@ -3,7 +3,7 @@ package ru.antonov.oauth2_social.course.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.proxy.HibernateProxy;
-import ru.antonov.oauth2_social.course.exception.IllegalTaskDeadlineEx;
+import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.user.entity.Institution;
 import ru.antonov.oauth2_social.user.entity.User;
 
@@ -20,7 +20,7 @@ import java.util.*;
         uniqueConstraints = {
                 @UniqueConstraint(columnNames = {"code"}),
                 @UniqueConstraint(columnNames = {"name", "institution_id"})
-})
+        })
 public class Course {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -31,7 +31,6 @@ public class Course {
 
     private String code;
 
-    @Setter(AccessLevel.NONE)
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -40,60 +39,45 @@ public class Course {
     private Institution institution;
 
     @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
-    private Set<CourseUser> courseUsers;
+    private Set<CourseUser> courseUsers = new HashSet<>();
 
     @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
-    private Set<CourseMaterial> courseMaterials;
+    private Set<CourseMaterial> courseMaterials = new HashSet<>();
 
-    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE} , orphanRemoval = true)
-    private Set<Task> tasks;
 
-    public void addCourseUsers(Set<CourseUser> courseUsers){
-        if(this.courseUsers != null) {
-            this.courseUsers.addAll(courseUsers);
-            courseUsers.forEach(cu -> cu.setCourse(this));
-        } else{
-            this.courseUsers = new HashSet<>(courseUsers);
-        }
+    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
+    private Set<Task> tasks = new HashSet<>();
+
+    @Version
+    private Long version;
+
+    public void addCourseUsers(Set<CourseUser> courseUsers) {
+        this.courseUsers.addAll(courseUsers);
+        courseUsers.forEach(cu -> cu.setCourse(this));
     }
 
-    public void addCourseUser(CourseUser courseUser){
-        if(this.courseUsers != null) {
-            this.courseUsers.add(courseUser);
-           courseUser.setCourse(this);
-        } else{
-            this.courseUsers = new HashSet<>();
-            this.courseUsers.add(courseUser);
-        }
+    public void addCourseUser(CourseUser courseUser) {
+        this.courseUsers.add(courseUser);
+        courseUser.setCourse(this);
     }
 
-    public void setCourseUsers(Set<CourseUser> courseUsers){
+    public void setCourseUsers(Set<CourseUser> courseUsers) {
         this.courseUsers = courseUsers;
         courseUsers.forEach(cu -> cu.setCourse(this));
     }
 
-    public void addCourseMaterial(CourseMaterial courseMaterial){
-        if(this.courseMaterials != null){
-            this.courseMaterials.add(courseMaterial);
-            courseMaterial.setCourse(this);
-        } else{
-            this.courseMaterials = new HashSet<>();
-            this.courseMaterials.add(courseMaterial);
-        }
+    public void addCourseMaterial(CourseMaterial courseMaterial) {
+        this.courseMaterials.add(courseMaterial);
+        courseMaterial.setCourse(this);
     }
 
-    public void removeUsers(List<User> users){
+    public void removeUsers(List<User> users) {
         users.forEach(u -> courseUsers.remove(
                 CourseUser
                         .builder()
                         .id(CourseUserKey.builder().userId(u.getId()).courseId(getId()).build())
                         .build()
         ));
-    }
-
-    @PrePersist
-    private void init(){
-        createdAt = LocalDateTime.now();
     }
 
     @Override

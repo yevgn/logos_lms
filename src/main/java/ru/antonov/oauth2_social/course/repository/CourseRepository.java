@@ -6,10 +6,22 @@ import org.springframework.stereotype.Repository;
 import ru.antonov.oauth2_social.course.entity.Course;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface CourseRepository extends JpaRepository<Course, UUID> {
     @Query(value = "SELECT c FROM Course c WHERE c.institution.id = :institutionId")
     List<Course> findAllByInstitutionId(UUID institutionId);
+
+    @Query("""
+                SELECT c FROM Course c
+                JOIN FETCH c.courseUsers cu
+                JOIN FETCH cu.user u
+                JOIN FETCH u.institution
+                WHERE c.id = :courseId
+            """)
+    Optional<Course> findByIdWithCourseUsers(UUID courseId);
+
+
 }

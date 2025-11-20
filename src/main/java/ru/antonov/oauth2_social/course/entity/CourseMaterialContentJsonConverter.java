@@ -4,7 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.AttributeConverter;
-import ru.antonov.oauth2_social.course.exception.JsonSerializationEx;
+import ru.antonov.oauth2_social.common.Content;
+import ru.antonov.oauth2_social.exception.JsonSerializationEx;
 
 import java.io.IOException;
 import java.util.ArrayList;

@@ -26,6 +26,14 @@ public interface CourseUserRepository extends JpaRepository<CourseUser, CourseUs
     List<CourseUser> findAllByCourseId(UUID courseId);
 
     @Query(value = """
+            SELECT cu.user u FROM CourseUser cu
+            JOIN FETCH cu.user.institution
+            JOIN FETCH cu.user.group
+            WHERE cu.course.id = :courseId AND cu.user.id IN :userIdList
+            """)
+    List<User> findAllUsersByCourseIdAndUserIdIn(UUID courseId, List<UUID> userIdList);
+
+    @Query(value = """
             SELECT cu FROM CourseUser cu
                 JOIN FETCH cu.user
                 JOIN FETCH cu.course c

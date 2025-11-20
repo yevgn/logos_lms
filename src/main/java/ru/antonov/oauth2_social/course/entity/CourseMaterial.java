@@ -3,6 +3,7 @@ package ru.antonov.oauth2_social.course.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.proxy.HibernateProxy;
+import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.time.LocalDateTime;
@@ -22,6 +23,9 @@ public class CourseMaterial {
     @Id
     private UUID id;
 
+    @Version
+    private Long version;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "course_id")
     private Course course;
@@ -31,7 +35,6 @@ public class CourseMaterial {
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Setter(AccessLevel.NONE)
     @Column(name = "published_at")
     private LocalDateTime publishedAt;
 
@@ -40,17 +43,13 @@ public class CourseMaterial {
 
     @Column(name = "course_material_content", columnDefinition = "varchar")
     @Convert(converter = CourseMaterialContentJsonConverter.class)
-    private List<Content> content;
+    private List<Content> content = new ArrayList<>();
 
     // ТИПА ОБЩЕЕ НАЗВАНИЕ (ЛЕКЦИИ, СЕМИНАР И Т.Д)
     private String topic;
 
-    public void addCourseMaterialContent(List<Content> newContent){
-        if(this.content != null){
-            this.content.addAll(newContent);
-        } else{
-            content = new ArrayList<>(newContent);
-        }
+    public void addCourseMaterialContent(List<Content> newContent) {
+        this.content.addAll(newContent);
     }
 
     @Override

@@ -21,5 +21,6 @@ public class CourseCreateWithGroupIdListRequestDto {
     private String name;
 
     @JsonProperty("group_id_list")
+    @Size(max = 10, message = "Максимальный размер поля group_id_list - 10")
     private List<UUID> groupIdList;
 }

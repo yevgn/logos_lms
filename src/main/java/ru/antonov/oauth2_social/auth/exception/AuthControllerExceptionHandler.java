@@ -23,6 +23,18 @@ public class AuthControllerExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
     }
 
+
+    @ExceptionHandler(AccountActivationTokenRenewEx.class)
+    public ResponseEntity<ApiError> handleAccountActivationTokenRenewEx(AccountActivationTokenRenewEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.OK)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.OK);
+    }
+
     @ExceptionHandler(JwtEx.class)
     public ResponseEntity<ApiError> handleJwtEx(JwtEx ex) {
         log.warn(ex.getDebugMessage());

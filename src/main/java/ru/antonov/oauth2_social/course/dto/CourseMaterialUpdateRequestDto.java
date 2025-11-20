@@ -7,7 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.web.multipart.MultipartFile;
-import ru.antonov.oauth2_social.course.validation.UniqueFileNames;
+import ru.antonov.oauth2_social.common.HasContentFiles;
+import ru.antonov.oauth2_social.common.validation.UniqueFileNames;
 
 import java.util.List;
 import java.util.UUID;
@@ -17,8 +18,8 @@ import java.util.UUID;
 @UniqueFileNames
 @NoArgsConstructor
 @AllArgsConstructor
-public class CourseMaterialUpdateRequestDto implements HasContentFiles{
-    @Pattern(regexp = ".*\\S.*", message = "Поле topic не может быть пустым или состоять только из пробелов")
+public class CourseMaterialUpdateRequestDto implements HasContentFiles {
+    @Pattern(regexp = ".*\\S.*", message = "Поле newTopic не может быть пустым или состоять только из пробелов")
     private String newTopic;
 
     @Size(max = 20, message = "Нельзя загрузить больше 20 файлов за один раз")

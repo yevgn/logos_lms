@@ -49,6 +49,20 @@ public class InstitutionService {
 
     }
 
+    public InstitutionResponseDto findInstitutionByUserId(UUID userId){
+        Institution institution = institutionRepository.findByUserId(userId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Пользователя не существует или он не привязан к учебному заведению",
+                        String.format(
+                                "Ошибка при поиске учебного заведения по id пользователя." +
+                                        " Пользователя %s не существует или он не привязан к учебному заведению",
+                                userId
+                        )
+                ));
+
+        return DtoFactory.makeInstitutionResponseDto(institution);
+    }
+
     public Institution save(Institution institution){
         return institutionRepository.saveAndFlush(institution);
     }

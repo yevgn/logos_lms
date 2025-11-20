@@ -12,6 +12,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.data.repository.query.Param;
@@ -27,7 +28,7 @@ import ru.antonov.oauth2_social.config.AccessManager;
 import ru.antonov.oauth2_social.course.dto.*;
 
 import ru.antonov.oauth2_social.course.entity.CourseMaterial;
-import ru.antonov.oauth2_social.course.entity.Content;
+import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.course.service.CourseService;
 
 import ru.antonov.oauth2_social.exception.AccessDeniedEx;
@@ -57,6 +58,8 @@ public class CourseController {
     private final CourseService courseService;
     private final UserService userService;
     private final AccessManager accessManager;
+    @Value("${spring.application.file-storage.base-path}")
+    private String basePath;
 
     @Operation(
             summary = "Добавление курса по списку id пользователей",
@@ -323,6 +326,18 @@ public class CourseController {
                                         }
                                     """)
                     )),
+            @ApiResponse(responseCode = "409",
+                    description = "Дублирующиеся данные",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Ошибка. Один или несколько пользователей, которых вы пытаетесь
+                                           добавить, уже состоят в этом курсе"
+                                        }
+                                    """)
+                    )),
             @ApiResponse(responseCode = "500",
                     description = "Ошибка при отправке сообщения о добавлении пользователя в курс на SMTP-сервер",
                     content = @io.swagger.v3.oas.annotations.media.Content(
@@ -375,6 +390,18 @@ public class CourseController {
                                         {
                                           "status" : "400",
                                           "message": "Ошибка. Курса с указанным id не существует"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Дублирующиеся данные",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Ошибка. Один или несколько пользователей, которых вы пытаетесь
+                                           добавить, уже состоят в этом курсе"
                                         }
                                     """)
                     )),
@@ -680,7 +707,7 @@ public class CourseController {
 
         checkPrincipalIsCourseMaterialAuthorOrCourseCreatorOrElseThrow(principal, courseMaterial);
 
-        courseService.deleteCourseMaterial(courseMaterial);
+        courseService.deleteCourseMaterial(principal, courseMaterial);
         return ResponseEntity.ok().build();
     }
 
@@ -793,7 +820,7 @@ public class CourseController {
     }
 
     @Operation(
-            summary = "Просмотр/скачивание файла по fileId",
+            summary = "Просмотр/скачивание файла из учебных материалов по fileId",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Просмотр/скачивание файлов")
@@ -835,7 +862,7 @@ public class CourseController {
                     ))
     }
     )
-    @GetMapping("/{courseId}/materials/{materialId}/files/{fileId}/download")
+    @GetMapping("/{courseId}/materials/{materialId}/files/{fileId}")
     public ResponseEntity<Resource> downloadCourseMaterialFile(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
@@ -939,7 +966,7 @@ public class CourseController {
                     ))
     }
     )
-    @GetMapping("/{courseId}/materials/{materialId}/download")
+    @GetMapping("/{courseId}/materials/{materialId}/zip")
     public void downloadCourseMaterialFilesZip(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
@@ -976,7 +1003,7 @@ public class CourseController {
 
         try (ZipOutputStream zipOut = new ZipOutputStream(response.getOutputStream())) {
             for (Content file : files) {
-                Path filePath = Paths.get(file.getPath());
+                Path filePath = Paths.get(basePath).resolve(file.getPath());
                 Resource resource = new UrlResource(filePath.toUri());
 
                 if (resource.exists() && resource.isReadable()) {

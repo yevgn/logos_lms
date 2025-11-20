@@ -17,7 +17,6 @@ import org.passay.EnglishCharacterData;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,8 +27,8 @@ import ru.antonov.oauth2_social.auth.service.AuthEmailService;
 import ru.antonov.oauth2_social.auth.service.JwtService;
 import ru.antonov.oauth2_social.auth.service.TokenService;
 import ru.antonov.oauth2_social.config.AccessManager;
-import ru.antonov.oauth2_social.course.service.CourseService;
 import ru.antonov.oauth2_social.user.dto.DtoFactory;
+import ru.antonov.oauth2_social.user.dto.InstitutionResponseDto;
 import ru.antonov.oauth2_social.user.dto.UserCreateRequestDto;
 import ru.antonov.oauth2_social.user.dto.UserResponseDto;
 
@@ -37,8 +36,9 @@ import ru.antonov.oauth2_social.user.entity.EntityFactory;
 import ru.antonov.oauth2_social.user.entity.Group;
 import ru.antonov.oauth2_social.user.entity.Role;
 import ru.antonov.oauth2_social.user.entity.User;
-import ru.antonov.oauth2_social.user.exception.EmptyFileEx;
+import ru.antonov.oauth2_social.exception.EmptyFileEx;
 import ru.antonov.oauth2_social.user.service.GroupService;
+import ru.antonov.oauth2_social.user.service.InstitutionService;
 import ru.antonov.oauth2_social.user.service.PasswordGenerator;
 import ru.antonov.oauth2_social.user.service.UserService;
 import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
@@ -55,12 +55,14 @@ import java.util.UUID;
 @Validated
 public class UserController {
     private final UserService userService;
+    private final InstitutionService institutionService;
     private final GroupService groupService;
     private final TokenService tokenService;
     private final AuthEmailService authEmailService;
     private final JwtService jwtService;
     private final AccessManager accessManager;
     private final PasswordGenerator passwordGenerator;
+
 
     private final Integer PASSWORD_LENGTH = 6;
     private final List<CharacterRule> PASSWORD_GEN_RULES = List.of(new CharacterRule(EnglishCharacterData.Digit));
@@ -616,6 +618,22 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
+    @GetMapping("/institution")
+    public ResponseEntity<InstitutionResponseDto> findInstitutionByUserId(
+            @AuthenticationPrincipal User principal,
+            @RequestParam("user_id") UUID userId
+    ){
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Пользователя с указанным id не существует",
+                        String.format("Ошибка при поиске учебного заведения по id пользователя. " +
+                                "Пользователя с id %s не существует", userId)
+                ));
+
+        checkUserHasAccessToOtherOrElseThrow(principal, user, false, true);
+
+        return ResponseEntity.ok(institutionService.findInstitutionByUserId(userId));
+    }
 
     private void checkPrincipalIsAttachedToInstitutionOrElseThrow(User principal) {
         if (principal.getInstitution() == null) {

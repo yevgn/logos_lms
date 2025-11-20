@@ -1,32 +1,8 @@
 spring:
-  security:
-    oauth2:
-      client:
-        registration:
-          google:
-            client-id: 811322847826-p10qeqvvjhlo4h7c3g76g14lfcfsh3pr.apps.googleusercontent.com
-            client-secret: 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
-            redirect-uri: http://localhost:8080/api/v1/auth/callback/google
-          yandex:
-            client-id: 4020b6ce688640b3a40b996a54a70286
-            client-secret: 2f3fbbe782b54d8390338d5d311cf391
-            client-authentication-method: client_secret_basic
-            authorization-grant-type: authorization_code
-            registration-id: yandex
-            scope: login:email, login:info
-            redirect-uri: http://localhost:8080/api/v1/auth/callback/yandex
-            client-name: Yandex
-        provider:
-          yandex:
-            authorization-uri: https://oauth.yandex.ru/authorize
-            token-uri: https://oauth.yandex.ru/token
-            user-info-uri: https://login.yandex.ru/info
-            user-name-attribute: id
-
   datasource:
-    url:  ${SPRING_DATASOURCE_URL} # jdbc:postgresql://localhost:5432/logos #${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME} # postgres #${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD} # root #${SPRING_DATASOURCE_PASSWORD}
+    url:  jdbc:postgresql://localhost:5432/logos
+    username:   postgres
+    password: root
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -35,7 +11,7 @@ spring:
        dialect: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
     hibernate:
-      ddl-auto: create
+      ddl-auto: update
 
   application:
     name: logos-lms-service
@@ -54,14 +30,19 @@ spring:
       reset-2fa: http://localhost:8081/front/logos-lms/api/v1/auth/reset-2fa
       activate-account: http://localhost:8080/front/logos-lms/api/v1/auth/activate-account
       get-course-info: front-url
+      get-task-info: front-url
+      get-course-material-info: front-url
+      get-solution-info: front-url
     sender-email: yvgnantnv@yandex.ru
     course-limit-params:
         max-file-amount-for-course-material: 20
-        max-task-and-material-file-amount-for-course: 200
+        max-file-amount-for-task: 10
+        max-file-amount-for-solution: 5
+        max-task-and-material-file-amount-for-course: 400
         max-solution-file-amount-for-course: 4000
         max-user-amount-for-course: 101
     file-storage:
-      base-path: /logos-data
+      base-path: D:\logos-lms
 
   servlet:
     multipart:

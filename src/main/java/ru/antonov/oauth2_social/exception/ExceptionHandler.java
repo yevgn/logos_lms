@@ -2,18 +2,22 @@ package ru.antonov.oauth2_social.exception;
 
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import org.springframework.http.converter.HttpMessageNotReadableException;
 
 
+import org.springframework.validation.BindingResult;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import ru.antonov.oauth2_social.config.ApiError;
@@ -25,6 +29,12 @@ import java.util.List;
 @ControllerAdvice
 @Slf4j
 public class ExceptionHandler {
+    @Value("${spring.servlet.multipart.max-file-size}")
+    private String maxFileSize;
+    @Value("${spring.servlet.multipart.max-request-size}")
+    private String maxRequestSize;
+
+
     @org.springframework.web.bind.annotation.ExceptionHandler(
             {MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class,
             HttpMessageNotReadableException.class, NoResourceFoundException.class}
@@ -37,6 +47,107 @@ public class ExceptionHandler {
                 .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(TaskAndCourseMaterialFileLimitForCourseExceededEx.class)
+    public ResponseEntity<ApiError> handleTaskAndMaterialFileLimitExceededEx(TaskAndCourseMaterialFileLimitForCourseExceededEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiError> handleHttpMediaTypeNotSupportedException(HttpMediaTypeNotSupportedException ex) {
+        log.warn(ex.getMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message("Вы отправили данные, формат которых не поддерживается")
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(JsonSerializationEx.class)
+    public ResponseEntity<ApiError> handleJsonSerializationEx(JsonSerializationEx ex) {
+        log.error(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(EmptyFileEx.class)
+    public ResponseEntity<ApiError> handleEmptyFileEx(EmptyFileEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(InvalidFileDataFormatEx.class)
+    public ResponseEntity<ApiError> handleInvalidFileDataFormatEx(InvalidFileDataFormatEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(IllegalArgumentEx.class)
+    public ResponseEntity<ApiError> handleIllegalArgumentEx(IllegalArgumentEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(FileNameNotUniqueEx.class)
+    public ResponseEntity<ApiError> handleFileNameNotUniqueEx(FileNameNotUniqueEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(FileDuplicatedEx.class)
+    public ResponseEntity<ApiError> handleFileDuplicatedEx(FileDuplicatedEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.CONFLICT)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(EntityLockEx.class)
+    public ResponseEntity<ApiError> handleEntityLockEx(EntityLockEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.CONFLICT)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
     }
 
     @org.springframework.web.bind.annotation.ExceptionHandler(FileNotFoundEx.class)
@@ -185,6 +296,17 @@ public class ExceptionHandler {
         return ResponseEntity.internalServerError().body(error);
     }
 
+    @org.springframework.web.bind.annotation.ExceptionHandler(AppConfigurationEx.class)
+    public ResponseEntity<ApiError> handleAppConfigurationEx(AppConfigurationEx ex){
+        log.error(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .message(ex.getMessage())
+                .build();
+        return ResponseEntity.internalServerError().body(error);
+    }
+
 //    @ExceptionHandler(MessagingException.class)
 //    public ResponseEntity<ApiError> handleMessagingException(MessagingException ex){
 //        log.error("Ошибка при создании mimeMessage\n" + ex.getMessage());
@@ -199,8 +321,16 @@ public class ExceptionHandler {
     @org.springframework.web.bind.annotation.ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidationExceptions(MethodArgumentNotValidException ex) {
         log.warn("Неуспешная валидация: ", ex);
+
+        BindingResult bindingResult = ex.getBindingResult();
+
         List<String> errors = new ArrayList<>();
-        ex.getBindingResult().getFieldErrors().forEach(error ->
+
+        bindingResult.getFieldErrors().forEach(error ->
+                errors.add(error.getDefaultMessage())
+        );
+
+        bindingResult.getGlobalErrors().forEach(error ->
                 errors.add(error.getDefaultMessage())
         );
 
@@ -231,5 +361,20 @@ public class ExceptionHandler {
                 .build();
 
         return ResponseEntity.badRequest().body(error);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
+        log.warn("Ошибка загрузки файлов. Превышены параметры maxFileSize, maxRequestSize\n" + ex.getMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(
+                        String.format("Ошибка при загрузке файлов. Вы пытаетесь загрузить слишком большие файлы." +
+                                " Максимальный размер одного файла - %s. Максимальный общий размер файлов в " +
+                                "одном запросе - %s ", maxFileSize, maxRequestSize)
+                )
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 }

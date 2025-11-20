@@ -7,8 +7,7 @@ import org.hibernate.proxy.HibernateProxy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import ru.antonov.oauth2_social.course.entity.CourseUser;
-import ru.antonov.oauth2_social.course.entity.Solution;
-import ru.antonov.oauth2_social.course.entity.Task;
+import ru.antonov.oauth2_social.solution.entity.Solution;
 
 import java.util.Collection;
 

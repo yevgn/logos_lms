@@ -20,7 +20,7 @@ import ru.antonov.oauth2_social.auth.entity.TokenType;
 import ru.antonov.oauth2_social.auth.exception.*;
 import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
 import ru.antonov.oauth2_social.user.entity.User;
-import ru.antonov.oauth2_social.user.exception.AccountActivationTokenRenewEx;
+import ru.antonov.oauth2_social.auth.exception.AccountActivationTokenRenewEx;
 import ru.antonov.oauth2_social.user.service.UserService;
 
 import java.util.List;
@@ -65,6 +65,7 @@ public class AuthService {
         tokenService.saveToken(refreshToken, TokenType.BEARER, TokenMode.REFRESH, user);
 
         return AuthResponseDto.builder()
+                .userId(user.getId())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .isTfaEnabled(false)
@@ -96,6 +97,7 @@ public class AuthService {
         tokenService.saveToken(refreshToken, TokenType.BEARER, TokenMode.REFRESH, user);
 
         return AuthResponseDto.builder()
+                .userId(user.getId())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .isTfaEnabled(user.isTfaEnabled())
@@ -138,6 +140,7 @@ public class AuthService {
 
         return AuthResponseDto
                 .builder()
+                .userId(user.getId())
                 .accessToken(newAccessToken)
                 .isTfaEnabled(user.isTfaEnabled())
                 .build();
@@ -236,6 +239,7 @@ public class AuthService {
 
         return AuthResponseDto
                 .builder()
+                .userId(user.getId())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .isTfaEnabled(user.isTfaEnabled())
@@ -348,6 +352,7 @@ public class AuthService {
         authEmailService.sendTfaSuccessfulResetNotification(user);
 
         return AuthResponseDto.builder()
+                .userId(user.getId())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .isTfaEnabled(user.isTfaEnabled())
@@ -386,6 +391,7 @@ public class AuthService {
 
         return AuthResponseDto
                 .builder()
+                .userId(user.getId())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .isTfaEnabled(user.isTfaEnabled())
@@ -425,6 +431,7 @@ public class AuthService {
 
         return AuthResponseDto
                 .builder()
+                .userId(user.getId())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .isTfaEnabled(user.isTfaEnabled())

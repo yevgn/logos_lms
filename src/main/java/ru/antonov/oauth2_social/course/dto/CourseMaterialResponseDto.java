@@ -5,11 +5,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import ru.antonov.oauth2_social.common.ContentFileResponseDto;
 import ru.antonov.oauth2_social.user.dto.UserShortResponseDto;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Builder
@@ -29,5 +29,5 @@ public class CourseMaterialResponseDto {
     @JsonProperty("last_changed_at")
     private LocalDateTime lastChangedAt;
 
-    private List<CourseMaterialContentResponseDto> content;
+    private List<ContentFileResponseDto> content;
 }

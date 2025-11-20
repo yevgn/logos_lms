@@ -3,7 +3,6 @@ package ru.antonov.oauth2_social.user.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.proxy.HibernateProxy;
-import ru.antonov.oauth2_social.course.entity.Task;
 
 import java.util.Objects;
 import java.util.Set;

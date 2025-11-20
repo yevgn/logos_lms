@@ -23,7 +23,6 @@ import ru.antonov.oauth2_social.auth.dto.*;
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.auth.service.AuthService;
 
-
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -503,5 +502,4 @@ public class AuthController {
         authService.activateAccount(accountActivationToken, userEmail);
         return ResponseEntity.ok("Вы успешно активировали свой аккаунт!");
     }
-
 }

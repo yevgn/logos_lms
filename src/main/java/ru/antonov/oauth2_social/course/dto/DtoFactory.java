@@ -1,8 +1,10 @@
 package ru.antonov.oauth2_social.course.dto;
 
-import ru.antonov.oauth2_social.course.entity.Course;
-import ru.antonov.oauth2_social.course.entity.CourseMaterial;
-import ru.antonov.oauth2_social.course.entity.Content;
+import ru.antonov.oauth2_social.common.Content;
+import ru.antonov.oauth2_social.common.ContentFileResponseDto;
+import ru.antonov.oauth2_social.course.entity.*;
+import ru.antonov.oauth2_social.solution.dto.*;
+import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.util.List;
@@ -25,6 +27,7 @@ public class DtoFactory {
                 .build();
     }
 
+
     public static CourseMaterialResponseDto makeCourseMaterialResponseDto(CourseMaterial courseMaterial) {
         return CourseMaterialResponseDto
                 .builder()
@@ -38,7 +41,7 @@ public class DtoFactory {
                 .content(
                         courseMaterial.getContent()
                                 .stream()
-                                .map(DtoFactory::makeCourseMaterialContentResponseDto)
+                                .map(DtoFactory::makeContentFileResponseDto)
                                 .toList()
                 )
                 .publishedAt(courseMaterial.getPublishedAt())
@@ -46,13 +49,12 @@ public class DtoFactory {
                 .build();
     }
 
-    public static CourseMaterialContentResponseDto makeCourseMaterialContentResponseDto(Content content) {
-        return CourseMaterialContentResponseDto
+    public static ContentFileResponseDto makeContentFileResponseDto(Content content) {
+        return ContentFileResponseDto
                 .builder()
                 .id(content.getId())
                 .originalFileName(content.getOriginalFileName())
                 .build();
     }
-
 
 }

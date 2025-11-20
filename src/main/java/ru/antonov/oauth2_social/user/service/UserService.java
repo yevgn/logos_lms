@@ -8,13 +8,12 @@ import org.passay.EnglishCharacterData;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import ru.antonov.oauth2_social.user.entity.Group;
 import ru.antonov.oauth2_social.user.entity.User;
-import ru.antonov.oauth2_social.user.exception.InvalidFileDataFormatEx;
+import ru.antonov.oauth2_social.exception.InvalidFileDataFormatEx;
 import ru.antonov.oauth2_social.user.repository.UserRepository;
 import ru.antonov.oauth2_social.exception.DBConstraintViolationEx;
 import ru.antonov.oauth2_social.exception.EntityNotFoundEx;

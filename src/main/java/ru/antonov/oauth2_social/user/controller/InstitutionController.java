@@ -69,6 +69,7 @@ public class InstitutionController {
         return ResponseEntity.ok(institutionService.saveInstitution(principal, request));
     }
 
+
     @Operation(
             summary = "Получение информации об учебном заведении по id",
             security = @SecurityRequirement(name = "bearerAuth")

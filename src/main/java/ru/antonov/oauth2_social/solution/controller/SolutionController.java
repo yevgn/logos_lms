@@ -1,28 +1,47 @@
 package ru.antonov.oauth2_social.solution.controller;
 
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.data.repository.query.Param;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.config.AccessManager;
+import ru.antonov.oauth2_social.exception.FileNotFoundEx;
+import ru.antonov.oauth2_social.exception.IOEx;
 import ru.antonov.oauth2_social.solution.dto.*;
+import ru.antonov.oauth2_social.solution.entity.Solution;
 import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.solution.service.SolutionService;
 import ru.antonov.oauth2_social.exception.AccessDeniedEx;
 import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
-import ru.antonov.oauth2_social.user.entity.Role;
+
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.user.service.UserService;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @RestController
 @RequestMapping("/solutions")
@@ -33,6 +52,9 @@ public class SolutionController {
     private final SolutionService solutionService;
     private final UserService userService;
     private final AccessManager accessManager;
+
+    @Value("${spring.application.file-storage.base-path}")
+    private String basePath;
 
     @PostMapping(value = "/task/{taskId}", consumes = "multipart/form-data")
     public ResponseEntity<SolutionResponseDto> addSolution(
@@ -141,7 +163,17 @@ public class SolutionController {
 
         checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
 
-        return ResponseEntity.ok(solutionService.findUnreviewedSolutionsByTaskIdGroupByUser(principal, taskId));
+        return ResponseEntity.ok(solutionService.findSolutionsByTaskIdGroupByUser(principal, taskId, true));
+    }
+
+    @GetMapping("/task/{taskId}/batch/reviewed")
+    public ResponseEntity<List<SolutionsGroupByUserShortResponseDto>> findReviewedSolutionsByTaskIdGroupByUser(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID taskId) {
+
+        checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
+
+        return ResponseEntity.ok(solutionService.findSolutionsByTaskIdGroupByUser(principal, taskId, false));
     }
 
     @GetMapping("/task/{taskId}/user/{userId}")
@@ -163,6 +195,7 @@ public class SolutionController {
         return ResponseEntity.ok(solutionService.findSolutionByTaskIdAndUserId(principal,  taskId, userId));
     }
 
+
     @GetMapping("/course/{courseId}/user/{userId}/batch/unreviewed")
     public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findUnreviewedSolutionsByCourseIdAndUserIdGroupByTask(
             @AuthenticationPrincipal User principal,
@@ -180,11 +213,31 @@ public class SolutionController {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
 
         return ResponseEntity.ok(
-                solutionService.findUnreviewedSolutionsByCourseIdAndUserIdGroupByTask(principal, courseId, userId)
+                solutionService.findSolutionsByCourseIdAndUserIdGroupByTask(principal, courseId, userId, true)
         );
+
     }
 
-    // todo сделать загрузку решений по общим и индивидуальным заданиям
+    @GetMapping("/course/{courseId}/user/{userId}/batch/reviewed")
+    public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findReviewedSolutionsByCourseIdAndUserIdGroupByTask(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID courseId,
+            @PathVariable UUID userId) {
+
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Такого пользователя не существует",
+                        String.format("Ошибка поиска решений по курсу и id пользователя пользователем %s." +
+                                " Пользователя %s не существует", principal.getEmail(), userId)
+                ));
+
+        checkPrincipalHasAccessToOtherOrElseThrow(principal, user, true, true);
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
+
+        return ResponseEntity.ok(
+                solutionService.findSolutionsByCourseIdAndUserIdGroupByTask(principal, courseId, userId, false)
+        );
+    }
 
     @GetMapping("/course/{courseId}/batch")
     public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findSolutionsByCourseIdGroupByTask(
@@ -198,6 +251,130 @@ public class SolutionController {
         );
     }
 
+    @GetMapping("/course/{courseId}/batch/unreviewed")
+    public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findUnreviewedSolutionsByCourseIdGroupByTask(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID courseId) {
+
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
+
+        return ResponseEntity.ok(
+                solutionService.findSolutionsByCourseIdGroupByTask(principal, courseId, true)
+        );
+    }
+
+    @GetMapping("/course/{courseId}/batch/reviewed")
+    public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findReviewedSolutionsByCourseIdGroupByTask(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID courseId) {
+
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
+
+        return ResponseEntity.ok(
+                solutionService.findSolutionsByCourseIdGroupByTask(principal, courseId, false)
+        );
+    }
+
+    @GetMapping("/{solutionId}/files/{fileId}")
+    public ResponseEntity<Resource> downloadSolutionFile(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID solutionId,
+            @PathVariable UUID fileId,
+            @Param(value = "Флаг. Если download = true, то файл будет скачан, если false - в режиме просмотра")
+            @RequestParam(required = false, defaultValue = "false") boolean download
+    ) {
+
+        checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
+
+        Solution solution = solutionService.findById(solutionId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Решение не найдено",
+                        String.format("Ошибка при получении файла решения пользователем %s. " +
+                                        "Решения с id %s не существует",
+                                principal.getEmail(),
+                                solutionId
+                        )
+                ));
+
+        Content file = solution.getContent()
+                .stream()
+                .filter(c -> c.getId().equals(fileId))
+                .findFirst()
+                .orElseThrow(() -> new FileNotFoundEx(
+                                "Ошибка. Такого файла не существует",
+                                String.format("Ошибка при получении файла решения пользователем %s. " +
+                                                "В решении %s не существует файла %s",
+                                        principal.getEmail(),
+                                        solutionId,
+                                        fileId
+                                )
+                        )
+                );
+
+        Resource resource = solutionService.getSolutionFile(file.getPath());
+
+        String disposition = download ? "attachment" : "inline";
+        String contentType = solutionService.resolveContentType(file.getOriginalFileName());
+
+        String encodedFileName = URLEncoder.encode(file.getOriginalFileName(), StandardCharsets.UTF_8)
+                .replace("+", "%20");
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        String.format("%s; filename*=UTF-8''%s", disposition, encodedFileName)
+                )
+                .body(resource);
+    }
+
+    @GetMapping("/{solutionId}/zip")
+    public void downloadSolutionFilesZip(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID solutionId,
+            HttpServletResponse response
+    ) {
+        checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
+
+        Solution solution = solutionService.findById(solutionId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Решение не найдено",
+                        String.format("Ошибка при получении файлов решения пользователем %s. " +
+                                        "Решения с id %s не существует",
+                                principal.getEmail(),
+                                solutionId
+                        )
+                ));
+
+        List<Content> files = solution.getContent();
+
+        String fileName = solution.getTask().getTitle() + "_" + solution.getUser().getSurname() + "_" +
+                solution.getUser().getName().charAt(0);
+        response.setContentType("application/zip");
+
+        String encodedFileName = URLEncoder.encode(fileName, StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFileName);
+
+        try (ZipOutputStream zipOut = new ZipOutputStream(response.getOutputStream())) {
+            for (Content file : files) {
+                Path filePath = Paths.get(basePath).resolve(file.getPath());
+                Resource resource = new UrlResource(filePath.toUri());
+                if (resource.exists() && resource.isReadable()) {
+                    zipOut.putNextEntry(new ZipEntry(file.getOriginalFileName()));
+                    Files.copy(filePath, zipOut);
+                    zipOut.closeEntry();
+                }
+            }
+        } catch (IOException ex) {
+            throw new IOEx(
+                    "Ошибка на сервере",
+                    String.format("Ошибка при архивировании файлов. Ошибка при архивировании файлов пользователем %s" +
+                            " для решения %s", principal.getId(), solutionId)
+            );
+        }
+    }
+
     private void checkPrincipalHasAccessToCourseOrElseThrow(
             User principal, UUID courseId, boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent) {
         if (!accessManager.isUserHasAccessToCourse(principal, courseId, isNeedToBeCreator, isNeedToHaveHigherRoleThanStudent)) {
@@ -205,28 +382,6 @@ public class SolutionController {
                     "Ошибка доступа. У вас нет доступа к этому курсу",
                     String.format("Отказ в доступе к курсу. Пользователь %s не имеет доступа к курсу %s",
                             principal.getEmail(), courseId)
-            );
-        }
-    }
-
-    private void checkPrincipalIsStudentOrElseThrow(User principal) {
-        if (principal.getRole() != Role.STUDENT) {
-            throw new AccessDeniedEx(
-                    "Ошибка доступа. Выполнять это действие могут только пользователи с ролью Студент",
-                    String.format("Отказ в доступе на выполнение действия. У пользователя %s с ролью %s" +
-                                    "нет прав на выполнение действия",
-                            principal.getEmail(), principal.getRole().name())
-            );
-        }
-    }
-
-    private void checkPrincipalIsTutorOrElseThrow(User principal) {
-        if (principal.getRole() != Role.TUTOR) {
-            throw new AccessDeniedEx(
-                    "Ошибка доступа. Выполнять это действие могут только пользователи с ролью Преподаватель",
-                    String.format("Отказ в доступе на выполнение действия. У пользователя %s с ролью %s" +
-                                    "нет прав на выполнение действия",
-                            principal.getEmail(), principal.getRole().name())
             );
         }
     }

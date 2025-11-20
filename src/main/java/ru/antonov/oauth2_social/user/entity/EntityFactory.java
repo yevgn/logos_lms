@@ -10,6 +10,8 @@ public class EntityFactory {
     public static User makeUserEntity(
             UserCreateRequestDto dto, String encodedPassword, Institution institution, Group group
     ){
+
+        // todo ИСПРАВИТЬ isEnabled(false)
         return User.builder()
                 .name(dto.getName())
                 .surname(dto.getSurname())
@@ -20,7 +22,7 @@ public class EntityFactory {
                 .password(encodedPassword)
                 .institution(institution)
                 .group(group)
-                .isEnabled(false)
+                .isEnabled(true)
                 .isTfaEnabled(false)
                 .tfaSecret(null)
                 .build();

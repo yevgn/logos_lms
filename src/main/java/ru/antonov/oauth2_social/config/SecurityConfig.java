@@ -184,7 +184,13 @@ public class SecurityConfig {
                                 .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
                                 .requestMatchers(HttpMethod.GET, "/solutions/task/*/batch/unreviewed")
                                 .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
+                                .requestMatchers(HttpMethod.GET, "/solutions/task/*/batch/reviewed")
+                                .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
                                 .requestMatchers(HttpMethod.GET, "/solutions/course/*/batch")
+                                .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
+                                .requestMatchers(HttpMethod.GET, "/solutions/course/*/batch/unreviewed")
+                                .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
+                                .requestMatchers(HttpMethod.GET, "/solutions/course/*/batch/reviewed")
                                 .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
 
                                 .requestMatchers(WHITE_LIST_URL)

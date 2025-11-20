@@ -12,10 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import ru.antonov.oauth2_social.common.Content;
-import ru.antonov.oauth2_social.course.dto.*;
 import ru.antonov.oauth2_social.course.entity.*;
 import ru.antonov.oauth2_social.course.exception.*;
-import ru.antonov.oauth2_social.course.service.CourseEmailService;
 import ru.antonov.oauth2_social.course.service.CourseLimitCounter;
 import ru.antonov.oauth2_social.course.service.CourseService;
 import ru.antonov.oauth2_social.common.FileService;
@@ -422,7 +420,7 @@ public class TaskService {
 
         List<Task> commonTasks = findAllCommonTasksByCourseId(courseId);
 
-        List<Task> targetTasks = findAllTargetTasksWithTaskUsersByCourseIdAndUserId(courseId, userId);
+        List<Task> targetTasks = findAllTargetTasksByCourseIdAndUserId(courseId, userId);
 
         Stream<Task> allUserTasksStream = Stream.concat(commonTasks.stream(), targetTasks.stream());
 
@@ -435,8 +433,12 @@ public class TaskService {
         return taskRepository.findAllCommonTasksByCourseId(courseId);
     }
 
-    public List<Task> findAllTargetTasksWithTaskUsersByCourseIdAndUserId(UUID courseId, UUID userId){
-        return taskRepository.findAllTargetTasksWithTaskUsersByCourseIdAndUserId(courseId, userId);
+    public List<Task> findAllTargetTasksByCourseIdAndUserId(UUID courseId, UUID userId){
+        return taskRepository.findAllTargetTasksByCourseIdAndUserId(courseId, userId);
+    }
+
+    public List<Task> findAllTargetTasksByCourseId(UUID courseId){
+        return taskRepository.findAllTargetTasksByCourseId(courseId);
     }
 
     public List<TaskShortResponseDto> getAllTaskInfoByCourseId(UUID courseId) {

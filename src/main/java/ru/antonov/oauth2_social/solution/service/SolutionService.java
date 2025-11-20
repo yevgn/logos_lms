@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.NestedExceptionUtils;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +31,8 @@ import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.task.service.TaskService;
 import ru.antonov.oauth2_social.user.entity.User;
 
+import java.net.MalformedURLException;
+import java.net.URLConnection;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
@@ -425,7 +429,9 @@ public class SolutionService {
                 .toList();
     }
 
-    public List<SolutionsGroupByUserShortResponseDto> findUnreviewedSolutionsByTaskIdGroupByUser(User principal, UUID taskId) {
+    public List<SolutionsGroupByUserShortResponseDto> findSolutionsByTaskIdGroupByUser(
+            User principal, UUID taskId, boolean isNeedUnreviewed
+    ) {
         Task task = taskService.findByIdWithSolutions(taskId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Такого задания не существует",
@@ -435,7 +441,15 @@ public class SolutionService {
 
         Map<User, List<Solution>> solutionsGroupByUser = task.getSolutions()
                 .stream()
-                .filter(s -> s.getStatus() == SolutionStatus.SUBMITTED || s.getStatus() == SolutionStatus.SUBMITTED_LATE)
+                .filter(s -> {
+                    if(isNeedUnreviewed) {
+                        return s.getStatus() == SolutionStatus.SUBMITTED ||
+                                s.getStatus() == SolutionStatus.SUBMITTED_LATE;
+                    } else{
+                        return s.getStatus() == SolutionStatus.ACCEPTED ||
+                                s.getStatus() == SolutionStatus.RETURNED;
+                    }
+                })
                 .collect(Collectors.groupingBy(Solution::getUser));
 
         return solutionsGroupByUser
@@ -450,7 +464,7 @@ public class SolutionService {
             User principal, UUID courseId, UUID userId
     ) {
         List<Task> commonTasksForCourse = taskService.findAllCommonTasksByCourseId(courseId);
-        List<Task> targetTasksForCourse = taskService.findAllTargetTasksWithTaskUsersByCourseIdAndUserId(courseId, userId);
+        List<Task> targetTasksForCourse = taskService.findAllTargetTasksByCourseIdAndUserId(courseId, userId);
 
         return Stream
                 .concat(commonTasksForCourse.stream(), targetTasksForCourse.stream())
@@ -465,11 +479,11 @@ public class SolutionService {
     }
 
     @Transactional
-    public List<SolutionsGroupByTaskShortResponseDto> findUnreviewedSolutionsByCourseIdAndUserIdGroupByTask(
-            User principal, UUID courseId, UUID userId
+    public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdAndUserIdGroupByTask(
+            User principal, UUID courseId, UUID userId, boolean isNeedUnreviewed
     ) {
         List<Task> commonTasksForCourse = taskService.findAllCommonTasksByCourseId(courseId);
-        List<Task> targetTasksForCourse = taskService.findAllTargetTasksWithTaskUsersByCourseIdAndUserId(courseId, userId);
+        List<Task> targetTasksForCourse = taskService.findAllTargetTasksByCourseIdAndUserId(courseId, userId);
 
         return Stream
                 .concat(commonTasksForCourse.stream(), targetTasksForCourse.stream())
@@ -478,8 +492,15 @@ public class SolutionService {
                                 t, t.getSolutions()
                                         .stream()
                                         .filter(s -> s.getUser().getId().equals(userId))
-                                        .filter(s -> s.getStatus() == SolutionStatus.SUBMITTED ||
-                                                s.getStatus() == SolutionStatus.SUBMITTED_LATE
+                                        .filter(s -> {
+                                                    if(isNeedUnreviewed) {
+                                                        return s.getStatus() == SolutionStatus.SUBMITTED ||
+                                                                s.getStatus() == SolutionStatus.SUBMITTED_LATE;
+                                                    } else{
+                                                        return s.getStatus() == SolutionStatus.ACCEPTED ||
+                                                                s.getStatus() == SolutionStatus.RETURNED;
+                                                    }
+                                                }
                                         )
                                         .toList()
                         )
@@ -487,8 +508,73 @@ public class SolutionService {
                 .toList();
     }
 
+    @Transactional
     public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdGroupByTask(User principal, UUID courseId) {
-        // todo доделать
-        return null;
+        List<Task> commonTasksForCourse = taskService.findAllCommonTasksByCourseId(courseId);
+        List<Task> targetTasksForCourse = taskService.findAllTargetTasksByCourseId(courseId);
+
+        return Stream
+                .concat(commonTasksForCourse.stream(), targetTasksForCourse.stream())
+                .map(t ->
+                        DtoFactory.makeSolutionsGroupByTaskShortResponseDto(
+                                t, t.getSolutions()
+                                        .stream()
+                                        .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+                                        .toList()
+                        )
+                )
+                .toList();
+    }
+
+    @Transactional
+    public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdGroupByTask(
+            User principal, UUID courseId, boolean isNeedUnreviewed
+    ) {
+        List<Task> commonTasksForCourse = taskService.findAllCommonTasksByCourseId(courseId);
+        List<Task> targetTasksForCourse = taskService.findAllTargetTasksByCourseId(courseId);
+
+        return Stream
+                .concat(commonTasksForCourse.stream(), targetTasksForCourse.stream())
+                .map(t ->
+                        DtoFactory.makeSolutionsGroupByTaskShortResponseDto(
+                                t, t.getSolutions()
+                                        .stream()
+                                        .filter(s -> {
+                                                    if(isNeedUnreviewed) {
+                                                        return s.getStatus() == SolutionStatus.SUBMITTED ||
+                                                                s.getStatus() == SolutionStatus.SUBMITTED_LATE;
+                                                    } else{
+                                                        return s.getStatus() == SolutionStatus.ACCEPTED ||
+                                                                s.getStatus() == SolutionStatus.RETURNED;
+                                                    }
+                                                }
+                                        )
+                                        .toList()
+                        )
+                )
+                .toList();
+    }
+
+    public Resource getSolutionFile(String path){
+        Path absPath = Paths.get(basePath).resolve(path);
+
+        try {
+            Resource resource = new UrlResource(absPath.toUri());
+            if (!resource.exists() || !resource.isReadable()) {
+                throw new IllegalArgumentException("Файл не найден");
+            }
+
+            return resource;
+        } catch (MalformedURLException ex){
+            throw new IllegalArgumentException("Ошибка на сервере");
+        }
+    }
+
+    public String resolveContentType(String fileName) {
+        String contentType = URLConnection.guessContentTypeFromName(fileName);
+        if (contentType == null) {
+            contentType = "application/octet-stream";
+        }
+        return contentType;
     }
 }

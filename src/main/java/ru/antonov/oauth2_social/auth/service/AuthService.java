@@ -104,15 +104,6 @@ public class AuthService {
                 .build();
     }
 
-    private void checkUserIsEnabledOrElseThrow(User user){
-        if(!user.isEnabled()){
-            throw new AccountNotEnabledEx(
-                    "Ошибка. Ваш аккаунт не активирован.",
-                    String.format("Ошибка. Аккаунт пользователя %s не активирован", user.getEmail() )
-            );
-        }
-    }
-
     public AuthResponseDto refreshAccessToken(RefreshAccessTokenRequestDto request) {
         String refreshToken = request.getRefreshToken();
         if (!jwtService.isTokenValid(refreshToken, TokenMode.REFRESH)) {

@@ -503,7 +503,7 @@ public class TaskController {
                                 String.format("Ошибка при получении файла задания пользователем %s. " +
                                                 "В задании %s не существует файла %s",
                                         principal.getEmail(),
-                                        task,
+                                        task.getId(),
                                         fileId
                                 )
                         )
@@ -587,7 +587,7 @@ public class TaskController {
         List<Content> files = task.getContent();
 
         response.setContentType("application/zip");
-        response.setHeader("Content-Disposition", "attachment; filename=\"" + task.getTaskUsers() + "\"");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + task.getTitle() + "\"");
 
         try (ZipOutputStream zipOut = new ZipOutputStream(response.getOutputStream())) {
             for (Content file : files) {

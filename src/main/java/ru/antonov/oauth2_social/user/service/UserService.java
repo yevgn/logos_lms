@@ -134,6 +134,7 @@ public class UserService {
                                 );
                     }
 
+                    // todo ИСПРАВИТЬ isEnabled(false)
                     return User
                             .builder()
                             .name(csv.getName())
@@ -143,7 +144,7 @@ public class UserService {
                             .role(csv.getRole())
                             .age(csv.getAge())
                             .email(csv.getEmail())
-                            .isEnabled(false)
+                            .isEnabled(true)
                             .tfaSecret(null)
                             .isTfaEnabled(false)
                             .password("{noop}" + passwordGenerator.generateRawPassword(PASSWORD_LENGTH, PASSWORD_GEN_RULES))

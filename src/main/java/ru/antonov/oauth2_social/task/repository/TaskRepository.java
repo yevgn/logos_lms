@@ -68,15 +68,24 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findAllByCourseId(UUID courseId);
 
     @Query("""
-        SELECT t FROM Task t
-        LEFT JOIN FETCH t.taskUsers tu
-        LEFT JOIN FETCH tu.user u
-        LEFT JOIN FETCH t.creator cr
+        SELECT tu.task FROM TaskUser tu
+        LEFT JOIN FETCH tu.task.creator cr
         LEFT JOIN FETCH cr.institution
         LEFT JOIN FETCH cr.group
-        LEFT JOIN FETCH t.course c
+        LEFT JOIN FETCH tu.task.course c
         LEFT JOIN FETCH c.institution
-        WHERE c.id = :courseId AND tu.user.id = :userId
+        WHERE c.id = :courseId AND tu.user.id = :userId AND tu.task.isForEveryone = false
     """)
-    List<Task> findAllTargetTasksWithTaskUsersByCourseIdAndUserId(UUID courseId, UUID userId);
+    List<Task> findAllTargetTasksByCourseIdAndUserId(UUID courseId, UUID userId);
+
+    @Query("""
+        SELECT DISTINCT tu.task FROM TaskUser tu
+        LEFT JOIN FETCH tu.task.creator cr
+        LEFT JOIN FETCH cr.institution
+        LEFT JOIN FETCH cr.group
+        LEFT JOIN FETCH tu.task.course c
+        LEFT JOIN FETCH c.institution
+        WHERE c.id = :courseId AND tu.task.isForEveryone = false
+    """)
+    List<Task> findAllTargetTasksByCourseId(UUID courseId);
 }

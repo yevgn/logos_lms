@@ -21,6 +21,17 @@ public class SolutionControllerExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(SolutionCommentAmountLimitExceededEx.class)
+    public ResponseEntity<ApiError> handleSolutionCommentAmountLimitExceededEx(SolutionCommentAmountLimitExceededEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(SolutionFileLimitExceededEx.class)
     public ResponseEntity<ApiError> handleSolutionFileLimitExceededEx(SolutionFileLimitExceededEx ex) {
         log.warn(ex.getDebugMessage());

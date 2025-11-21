@@ -1,6 +1,7 @@
 package ru.antonov.oauth2_social.solution.service;
 
 import jakarta.persistence.OptimisticLockException;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,6 +19,7 @@ import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.common.FileService;
 import ru.antonov.oauth2_social.course.service.CourseLimitCounter;
 import ru.antonov.oauth2_social.course.service.CourseService;
+import ru.antonov.oauth2_social.solution.common.SortBy;
 import ru.antonov.oauth2_social.solution.repository.SolutionRepository;
 import ru.antonov.oauth2_social.exception.DBConstraintViolationEx;
 import ru.antonov.oauth2_social.exception.EntityLockEx;
@@ -30,6 +32,7 @@ import ru.antonov.oauth2_social.solution.exception.*;
 import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.task.service.TaskService;
 import ru.antonov.oauth2_social.user.entity.User;
+import ru.antonov.oauth2_social.user.service.UserService;
 
 import java.net.MalformedURLException;
 import java.net.URLConnection;
@@ -49,7 +52,7 @@ public class SolutionService {
     private final SolutionRepository solutionRepository;
 
     private final TaskService taskService;
-    private final CourseService courseService;
+    private final UserService userService;
 
     private final SolutionEmailService solutionEmailService;
     private final CourseLimitCounter courseLimitCounter;
@@ -59,6 +62,8 @@ public class SolutionService {
     private int maxSolutionFileAmountForCourse;
     @Value("${spring.application.course-limit-params.max-file-amount-for-solution}")
     private int maxFileAmountForSolution;
+    @Value("${spring.application.course-limit-params.max-comment-amount-for-solution}")
+    private int maxCommentAmountForSolution;
     @Value("${spring.application.file-storage.base-path}")
     private String basePath;
 
@@ -386,7 +391,7 @@ public class SolutionService {
         return DtoFactory.makeSolutionResponseDto(solution);
     }
 
-    public SolutionResponseDto findSolutionByTaskIdAndUserId(User principal, UUID taskId, UUID userId){
+    public SolutionResponseDto findSolutionByTaskIdAndUserId(User principal, UUID taskId, UUID userId) {
         Solution solution = solutionRepository.findByUserIdAndTaskId(userId, taskId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Заданный пользователь не загрузил решение к этому заданию",
@@ -409,28 +414,8 @@ public class SolutionService {
         return solutionRepository.findById(solutionId);
     }
 
-    public List<SolutionsGroupByUserShortResponseDto> findSolutionsByTaskIdGroupByUser(User principal, UUID taskId) {
-        Task task = taskService.findByIdWithSolutions(taskId)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Ошибка. Такого задания не существует",
-                        String.format("Ошибка при поиске решений пользователем %s по заданию %s. " +
-                                "Задания не существует", principal.getEmail(), taskId)
-                ));
-
-        Map<User, List<Solution>> solutionsGroupByUser = task.getSolutions()
-                .stream()
-                .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
-                .collect(Collectors.groupingBy(Solution::getUser));
-
-        return solutionsGroupByUser
-                .entrySet()
-                .stream()
-                .map(e -> DtoFactory.makeSolutionsGroupByUserShortResponseDto(e.getKey(), e.getValue()))
-                .toList();
-    }
-
-    public List<SolutionsGroupByUserShortResponseDto> findSolutionsByTaskIdGroupByUser(
-            User principal, UUID taskId, boolean isNeedUnreviewed
+    public List<SolutionWithUserShortResponseDto> findSolutionsByTaskId(
+            User principal, UUID taskId, SortBy sortBy
     ) {
         Task task = taskService.findByIdWithSolutions(taskId)
                 .orElseThrow(() -> new EntityNotFoundEx(
@@ -439,123 +424,193 @@ public class SolutionService {
                                 "Задания не существует", principal.getEmail(), taskId)
                 ));
 
-        Map<User, List<Solution>> solutionsGroupByUser = task.getSolutions()
+        Stream<SolutionWithUserShortResponseDto> resStream = task.getSolutions()
+                .stream()
+                .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+                .map(DtoFactory::makeSolutionWithUserShortResponseDto);
+
+        if(sortBy == SortBy.USER){
+            resStream = resStream.sorted(Comparator.comparing(
+                    dto -> dto.getUser().getSurname(),
+                    String::compareTo
+            ));
+        } else if(sortBy == SortBy.SOLUTION_SUBMITTED_AT) {
+            resStream = resStream.sorted(
+                    Comparator.comparing(
+                            SolutionWithUserShortResponseDto::getSubmittedAt,
+                            LocalDateTime::compareTo
+                    )
+            );
+        }
+
+        return resStream.toList();
+    }
+
+    public List<SolutionWithUserShortResponseDto> findSolutionsByTaskId(
+            User principal, UUID taskId, SortBy sortBy, boolean isNeedUnreviewed
+    ) {
+        Task task = taskService.findByIdWithSolutions(taskId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Такого задания не существует",
+                        String.format("Ошибка при поиске решений пользователем %s по заданию %s. " +
+                                "Задания не существует", principal.getEmail(), taskId)
+                ));
+
+        Stream<SolutionWithUserShortResponseDto> resStream = task.getSolutions()
                 .stream()
                 .filter(s -> {
-                    if(isNeedUnreviewed) {
+                    if (isNeedUnreviewed) {
                         return s.getStatus() == SolutionStatus.SUBMITTED ||
                                 s.getStatus() == SolutionStatus.SUBMITTED_LATE;
-                    } else{
+                    } else {
                         return s.getStatus() == SolutionStatus.ACCEPTED ||
                                 s.getStatus() == SolutionStatus.RETURNED;
                     }
                 })
-                .collect(Collectors.groupingBy(Solution::getUser));
+                .map(DtoFactory::makeSolutionWithUserShortResponseDto);
 
-        return solutionsGroupByUser
-                .entrySet()
-                .stream()
-                .map(e -> DtoFactory.makeSolutionsGroupByUserShortResponseDto(e.getKey(), e.getValue()))
-                .toList();
+        if(sortBy == SortBy.USER){
+            resStream = resStream.sorted(Comparator.comparing(
+                    dto -> dto.getUser().getSurname(),
+                    String::compareTo
+            ));
+        } else if(sortBy == SortBy.SOLUTION_SUBMITTED_AT) {
+            resStream = resStream.sorted(
+                    Comparator.comparing(
+                            SolutionWithUserShortResponseDto::getSubmittedAt,
+                            LocalDateTime::compareTo
+                    )
+            );
+        }
+
+        return resStream.toList();
     }
 
-    @Transactional
-    public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdAndUserIdGroupByTask(
-            User principal, UUID courseId, UUID userId
+    public List<SolutionWithTaskShortResponseDto> findSolutionsByCourseIdAndUserId(
+            User principal, UUID courseId, UUID userId, SortBy sortBy
     ) {
-        List<Task> commonTasksForCourse = taskService.findAllCommonTasksByCourseId(courseId);
-        List<Task> targetTasksForCourse = taskService.findAllTargetTasksByCourseIdAndUserId(courseId, userId);
+        List<Solution> solutions = solutionRepository.findAllByCourseIdAndUserId(courseId, userId);
 
-        return Stream
-                .concat(commonTasksForCourse.stream(), targetTasksForCourse.stream())
-                .map(t ->
-                        DtoFactory.makeSolutionsGroupByTaskShortResponseDto(t,
-                                t.getSolutions().stream()
-                                        .filter(s -> s.getUser().getId().equals(userId))
-                                        .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
-                                        .toList())
-                )
-                .toList();
+        Stream<SolutionWithTaskShortResponseDto> resStream =  solutions.stream()
+                .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+                .map(DtoFactory::makeSolutionWithTaskShortResponseDto);
+
+        if(sortBy == SortBy.TASK_PUBLISHED_AT){
+            resStream = resStream.sorted(
+                    Comparator.comparing(
+                            dto -> dto.getTask().getPublishedAt(),
+                            LocalDateTime::compareTo
+                    )
+            );
+        } else if(sortBy == SortBy.SOLUTION_SUBMITTED_AT){
+            resStream = resStream.sorted(
+                    Comparator.comparing(
+                            SolutionWithTaskShortResponseDto::getSubmittedAt,
+                            LocalDateTime::compareTo
+                    )
+            );
+        }
+
+        return resStream.toList();
     }
 
-    @Transactional
-    public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdAndUserIdGroupByTask(
-            User principal, UUID courseId, UUID userId, boolean isNeedUnreviewed
+    public List<SolutionWithTaskShortResponseDto> findSolutionsByCourseIdAndUserId(
+            User principal, UUID courseId, UUID userId, SortBy sortBy, boolean isNeedUnreviewed
     ) {
-        List<Task> commonTasksForCourse = taskService.findAllCommonTasksByCourseId(courseId);
-        List<Task> targetTasksForCourse = taskService.findAllTargetTasksByCourseIdAndUserId(courseId, userId);
+        List<Solution> solutions = solutionRepository.findAllByCourseIdAndUserId(courseId, userId);
 
-        return Stream
-                .concat(commonTasksForCourse.stream(), targetTasksForCourse.stream())
-                .map(t ->
-                        DtoFactory.makeSolutionsGroupByTaskShortResponseDto(
-                                t, t.getSolutions()
-                                        .stream()
-                                        .filter(s -> s.getUser().getId().equals(userId))
-                                        .filter(s -> {
-                                                    if(isNeedUnreviewed) {
-                                                        return s.getStatus() == SolutionStatus.SUBMITTED ||
-                                                                s.getStatus() == SolutionStatus.SUBMITTED_LATE;
-                                                    } else{
-                                                        return s.getStatus() == SolutionStatus.ACCEPTED ||
-                                                                s.getStatus() == SolutionStatus.RETURNED;
-                                                    }
-                                                }
-                                        )
-                                        .toList()
-                        )
+        Stream<SolutionWithTaskShortResponseDto> resStream = solutions.stream()
+                .filter(s -> {
+                            if (isNeedUnreviewed) {
+                                return s.getStatus() == SolutionStatus.SUBMITTED ||
+                                        s.getStatus() == SolutionStatus.SUBMITTED_LATE;
+                            } else {
+                                return s.getStatus() == SolutionStatus.ACCEPTED ||
+                                        s.getStatus() == SolutionStatus.RETURNED;
+                            }
+                        }
                 )
-                .toList();
-    }
+                .map(DtoFactory::makeSolutionWithTaskShortResponseDto);
 
-    @Transactional
-    public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdGroupByTask(User principal, UUID courseId) {
-        List<Task> commonTasksForCourse = taskService.findAllCommonTasksByCourseId(courseId);
-        List<Task> targetTasksForCourse = taskService.findAllTargetTasksByCourseId(courseId);
+        if(sortBy == SortBy.TASK_PUBLISHED_AT){
+            resStream = resStream.sorted(
+                    Comparator.comparing(
+                            dto -> dto.getTask().getPublishedAt(),
+                            LocalDateTime::compareTo
+                    )
+            );
+        } else if(sortBy == SortBy.SOLUTION_SUBMITTED_AT){
+            resStream = resStream.sorted(
+                    Comparator.comparing(
+                            SolutionWithTaskShortResponseDto::getSubmittedAt,
+                            LocalDateTime::compareTo
+                    )
+            );
+        }
 
-        return Stream
-                .concat(commonTasksForCourse.stream(), targetTasksForCourse.stream())
-                .map(t ->
-                        DtoFactory.makeSolutionsGroupByTaskShortResponseDto(
-                                t, t.getSolutions()
-                                        .stream()
-                                        .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
-                                        .toList()
-                        )
-                )
-                .toList();
+        return resStream.toList();
+
     }
 
     @Transactional
     public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdGroupByTask(
-            User principal, UUID courseId, boolean isNeedUnreviewed
-    ) {
-        List<Task> commonTasksForCourse = taskService.findAllCommonTasksByCourseId(courseId);
-        List<Task> targetTasksForCourse = taskService.findAllTargetTasksByCourseId(courseId);
+            User principal, UUID courseId, SortBy sortBy) {
+        List<Solution> solutions = solutionRepository.findAllByCourseId(courseId);
 
-        return Stream
-                .concat(commonTasksForCourse.stream(), targetTasksForCourse.stream())
-                .map(t ->
-                        DtoFactory.makeSolutionsGroupByTaskShortResponseDto(
-                                t, t.getSolutions()
-                                        .stream()
-                                        .filter(s -> {
-                                                    if(isNeedUnreviewed) {
-                                                        return s.getStatus() == SolutionStatus.SUBMITTED ||
-                                                                s.getStatus() == SolutionStatus.SUBMITTED_LATE;
-                                                    } else{
-                                                        return s.getStatus() == SolutionStatus.ACCEPTED ||
-                                                                s.getStatus() == SolutionStatus.RETURNED;
-                                                    }
-                                                }
-                                        )
-                                        .toList()
-                        )
-                )
-                .toList();
+        Stream<SolutionsGroupByTaskShortResponseDto> resStream = solutions.stream()
+                .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+                .collect(Collectors.groupingBy(Solution::getTask))
+                .entrySet()
+                .stream()
+                .map(e -> DtoFactory.makeSolutionsGroupByTaskShortResponseDto(e.getKey(), e.getValue()));
+
+        if(sortBy == SortBy.TASK_PUBLISHED_AT){
+            resStream = resStream.sorted(
+                    Comparator.comparing(
+                            dto -> dto.getTask().getPublishedAt(),
+                            LocalDateTime::compareTo
+                    )
+            );
+        }
+
+        return resStream.toList();
     }
 
-    public Resource getSolutionFile(String path){
+    @Transactional
+    public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdGroupByTask(
+            User principal, UUID courseId, SortBy sortBy, boolean isNeedUnreviewed
+    ) {
+        List<Solution> solutions = solutionRepository.findAllByCourseId(courseId);
+
+        Stream<SolutionsGroupByTaskShortResponseDto> resStream = solutions.stream()
+                .filter(s -> {
+                            if (isNeedUnreviewed) {
+                                return s.getStatus() == SolutionStatus.SUBMITTED ||
+                                        s.getStatus() == SolutionStatus.SUBMITTED_LATE;
+                            } else {
+                                return s.getStatus() == SolutionStatus.ACCEPTED ||
+                                        s.getStatus() == SolutionStatus.RETURNED;
+                            }
+                        }
+                )
+                .collect(Collectors.groupingBy(Solution::getTask))
+                .entrySet()
+                .stream()
+                .map(e -> DtoFactory.makeSolutionsGroupByTaskShortResponseDto(e.getKey(), e.getValue()));
+
+        if(sortBy == SortBy.TASK_PUBLISHED_AT){
+            resStream = resStream.sorted(
+                    Comparator.comparing(
+                            dto -> dto.getTask().getPublishedAt(),
+                            LocalDateTime::compareTo
+                    )
+            );
+        }
+
+        return resStream.toList();
+    }
+
+    public Resource getSolutionFile(String path) {
         Path absPath = Paths.get(basePath).resolve(path);
 
         try {
@@ -565,7 +620,7 @@ public class SolutionService {
             }
 
             return resource;
-        } catch (MalformedURLException ex){
+        } catch (MalformedURLException ex) {
             throw new IllegalArgumentException("Ошибка на сервере");
         }
     }
@@ -575,6 +630,87 @@ public class SolutionService {
         if (contentType == null) {
             contentType = "application/octet-stream";
         }
+
         return contentType;
+    }
+
+    public void saveComment(User principal, UUID solutionId, SolutionCommentCreateRequestDto request) {
+        Solution solution = solutionRepository.findById(solutionId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Такого решения не существует",
+                        String.format("Ошибка при загрузке комментария к решению пользователем %s. " +
+                                "Решения %s не существует", principal.getEmail(), solutionId)
+                ));
+
+        if (courseLimitCounter.isCommentAmountForSolutionExceedsLimit(solutionId, 1)) {
+            throw new SolutionCommentAmountLimitExceededEx(
+                    String.format("Ошибка. Превышено максимальное число комментариев для решения - %s",
+                            maxCommentAmountForSolution),
+                    String.format("Ошибка добавления комментария к решению %s пользователем %s. Превышен лимит",
+                            solutionId, principal.getId())
+            );
+        }
+
+        Solution.SolutionComment comment = Solution.SolutionComment.builder()
+                .id(UUID.randomUUID())
+                .userId(principal.getId())
+                .text(request.getText())
+                .publishedAt(LocalDateTime.now())
+                .build();
+
+        solution.addComments(List.of(comment));
+
+        try {
+            solutionRepository.save(solution);
+        } catch (OptimisticLockException ex) {
+            throw new EntityLockEx(
+                    "Ошибка. Решение было изменено. Повторите попытку",
+                    String.format("Ошибка при добавлении комментария к решению %s пользователем %s. Решение было " +
+                            "изменено другим пользователем", solution.getId(), principal.getId())
+            );
+        }
+    }
+
+    public void deleteComment(User principal, UUID solutionId, UUID commentId) {
+        Solution solution = solutionRepository.findById(solutionId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Такого решения не существует",
+                        String.format("Ошибка при удалении комментария к решению пользователем %s. " +
+                                "Решения %s не существует", principal.getEmail(), solutionId)
+                ));
+
+        List<Solution.SolutionComment> comments = solution.getComments();
+
+        solution.setComments(
+                comments.
+                        stream()
+                        .filter(s -> !s.getId().equals(commentId))
+                        .toList()
+        );
+
+        try {
+            solutionRepository.save(solution);
+        } catch (OptimisticLockException ex) {
+            throw new EntityLockEx(
+                    "Ошибка. Решение было изменено. Повторите попытку",
+                    String.format("Ошибка при удалении комментария к решению %s пользователем %s. Решение было " +
+                            "изменено другим пользователем", solution.getId(), principal.getId())
+            );
+        }
+    }
+
+    public List<SolutionCommentResponseDto> findCommentsBySolutionId(User principal, UUID solutionId) {
+        Solution solution = solutionRepository.findById(solutionId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Такого решения не существует",
+                        String.format("Ошибка при поиске комментариев к решению пользователем %s. " +
+                                "Решения %s не существует", principal.getEmail(), solutionId)
+                ));
+
+        return solution.getComments().stream().map(c -> {
+                    User author = userService.findById(c.getUserId()).orElse(null);
+                    return DtoFactory.makeSolutionCommentResponseDto(c, author);
+                })
+                .toList();
     }
 }

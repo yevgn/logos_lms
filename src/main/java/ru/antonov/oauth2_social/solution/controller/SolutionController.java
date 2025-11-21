@@ -21,6 +21,7 @@ import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.config.AccessManager;
 import ru.antonov.oauth2_social.exception.FileNotFoundEx;
 import ru.antonov.oauth2_social.exception.IOEx;
+import ru.antonov.oauth2_social.solution.common.SortBy;
 import ru.antonov.oauth2_social.solution.dto.*;
 import ru.antonov.oauth2_social.solution.entity.Solution;
 import ru.antonov.oauth2_social.task.entity.Task;
@@ -128,20 +129,23 @@ public class SolutionController {
     }
 
     @GetMapping("/task/{taskId}/batch")
-    public ResponseEntity<List<SolutionsGroupByUserShortResponseDto>> findSolutionsByTaskIdGroupByUser(
+    public ResponseEntity<List<SolutionWithUserShortResponseDto>> findSolutionsByTaskId(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID taskId) {
+            @PathVariable UUID taskId,
+            @RequestParam(value = "sort_by", required = false) SortBy sortBy) {
 
         checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
 
-        return ResponseEntity.ok(solutionService.findSolutionsByTaskIdGroupByUser(principal, taskId));
+        return ResponseEntity.ok(solutionService.findSolutionsByTaskId(principal, taskId, sortBy));
     }
 
     @GetMapping("/course/{courseId}/user/{userId}/batch")
-    public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findSolutionsByCourseIdAndUserIdGroupByTask(
+    public ResponseEntity<List<SolutionWithTaskShortResponseDto>> findSolutionsByCourseIdAndUserId(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
-            @PathVariable UUID userId) {
+            @PathVariable UUID userId,
+            @RequestParam(value = "sort_by", required = false) SortBy sortBy
+    ) {
 
         User user = userService.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundEx(
@@ -153,27 +157,29 @@ public class SolutionController {
         checkPrincipalHasAccessToOtherOrElseThrow(principal, user, true, true);
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
 
-        return ResponseEntity.ok(solutionService.findSolutionsByCourseIdAndUserIdGroupByTask(principal, courseId, userId));
+        return ResponseEntity.ok(solutionService.findSolutionsByCourseIdAndUserId(principal, courseId, userId, sortBy));
     }
 
     @GetMapping("/task/{taskId}/batch/unreviewed")
-    public ResponseEntity<List<SolutionsGroupByUserShortResponseDto>> findUnreviewedSolutionsByTaskIdGroupByUser(
+    public ResponseEntity<List<SolutionWithUserShortResponseDto>> findUnreviewedSolutionsByTaskId(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID taskId) {
+            @PathVariable UUID taskId,
+            @RequestParam(value = "sort_by", required = false) SortBy sortBy) {
 
         checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
 
-        return ResponseEntity.ok(solutionService.findSolutionsByTaskIdGroupByUser(principal, taskId, true));
+        return ResponseEntity.ok(solutionService.findSolutionsByTaskId(principal, taskId, sortBy, true));
     }
 
     @GetMapping("/task/{taskId}/batch/reviewed")
-    public ResponseEntity<List<SolutionsGroupByUserShortResponseDto>> findReviewedSolutionsByTaskIdGroupByUser(
+    public ResponseEntity<List<SolutionWithUserShortResponseDto>> findReviewedSolutionsByTaskId(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID taskId) {
+            @PathVariable UUID taskId,
+            @RequestParam(value = "sort_by", required = false) SortBy sortBy) {
 
         checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
 
-        return ResponseEntity.ok(solutionService.findSolutionsByTaskIdGroupByUser(principal, taskId, false));
+        return ResponseEntity.ok(solutionService.findSolutionsByTaskId(principal, taskId, sortBy, false));
     }
 
     @GetMapping("/task/{taskId}/user/{userId}")
@@ -192,15 +198,15 @@ public class SolutionController {
         checkPrincipalHasAccessToOtherOrElseThrow(principal, user, true, true);
         checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
 
-        return ResponseEntity.ok(solutionService.findSolutionByTaskIdAndUserId(principal,  taskId, userId));
+        return ResponseEntity.ok(solutionService.findSolutionByTaskIdAndUserId(principal, taskId, userId));
     }
 
-
     @GetMapping("/course/{courseId}/user/{userId}/batch/unreviewed")
-    public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findUnreviewedSolutionsByCourseIdAndUserIdGroupByTask(
+    public ResponseEntity<List<SolutionWithTaskShortResponseDto>> findUnreviewedSolutionsByCourseIdAndUserId(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
-            @PathVariable UUID userId) {
+            @PathVariable UUID userId,
+            @RequestParam(value = "sort_by", required = false) SortBy sortBy) {
 
         User user = userService.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundEx(
@@ -213,16 +219,17 @@ public class SolutionController {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
 
         return ResponseEntity.ok(
-                solutionService.findSolutionsByCourseIdAndUserIdGroupByTask(principal, courseId, userId, true)
+                solutionService.findSolutionsByCourseIdAndUserId(principal, courseId, userId, sortBy, true)
         );
 
     }
 
     @GetMapping("/course/{courseId}/user/{userId}/batch/reviewed")
-    public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findReviewedSolutionsByCourseIdAndUserIdGroupByTask(
+    public ResponseEntity<List<SolutionWithTaskShortResponseDto>> findReviewedSolutionsByCourseIdAndUserId(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
-            @PathVariable UUID userId) {
+            @PathVariable UUID userId,
+            @RequestParam(value = "sort_by", required = false) SortBy sortBy) {
 
         User user = userService.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundEx(
@@ -235,43 +242,46 @@ public class SolutionController {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
 
         return ResponseEntity.ok(
-                solutionService.findSolutionsByCourseIdAndUserIdGroupByTask(principal, courseId, userId, false)
+                solutionService.findSolutionsByCourseIdAndUserId(principal, courseId, userId, sortBy, false)
         );
     }
 
     @GetMapping("/course/{courseId}/batch")
     public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findSolutionsByCourseIdGroupByTask(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID courseId) {
+            @PathVariable UUID courseId,
+            @RequestParam(value = "sort_by", required = false) SortBy sortBy) {
 
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
         return ResponseEntity.ok(
-                solutionService.findSolutionsByCourseIdGroupByTask(principal, courseId)
+                solutionService.findSolutionsByCourseIdGroupByTask(principal, courseId, sortBy)
         );
     }
 
     @GetMapping("/course/{courseId}/batch/unreviewed")
     public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findUnreviewedSolutionsByCourseIdGroupByTask(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID courseId) {
+            @PathVariable UUID courseId,
+            @RequestParam(value = "sort_by", required = false) SortBy sortBy) {
 
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
         return ResponseEntity.ok(
-                solutionService.findSolutionsByCourseIdGroupByTask(principal, courseId, true)
+                solutionService.findSolutionsByCourseIdGroupByTask(principal, courseId, sortBy, true)
         );
     }
 
     @GetMapping("/course/{courseId}/batch/reviewed")
     public ResponseEntity<List<SolutionsGroupByTaskShortResponseDto>> findReviewedSolutionsByCourseIdGroupByTask(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID courseId) {
+            @PathVariable UUID courseId,
+            @RequestParam(value = "sort_by", required = false) SortBy sortBy) {
 
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
         return ResponseEntity.ok(
-                solutionService.findSolutionsByCourseIdGroupByTask(principal, courseId, false)
+                solutionService.findSolutionsByCourseIdGroupByTask(principal, courseId, sortBy,false)
         );
     }
 
@@ -375,6 +385,44 @@ public class SolutionController {
         }
     }
 
+    @PostMapping("/{solutionId}/comments")
+    public ResponseEntity<?> saveComment(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID solutionId,
+            @Valid @RequestBody SolutionCommentCreateRequestDto request
+    ) {
+
+        checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
+
+        solutionService.saveComment(principal, solutionId, request);
+
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{solutionId}/comments")
+    public ResponseEntity<List<SolutionCommentResponseDto>> findCommentsBySolutionId(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID solutionId
+    ) {
+        checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
+
+        return ResponseEntity.ok(solutionService.findCommentsBySolutionId(principal, solutionId));
+    }
+
+    @DeleteMapping("/{solutionId}/comments/{commentId}")
+    public ResponseEntity<?> deleteCommentById(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID solutionId,
+            @PathVariable UUID commentId
+    ) {
+
+        checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
+
+        solutionService.deleteComment(principal, solutionId, commentId);
+
+        return ResponseEntity.ok().build();
+    }
+
     private void checkPrincipalHasAccessToCourseOrElseThrow(
             User principal, UUID courseId, boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent) {
         if (!accessManager.isUserHasAccessToCourse(principal, courseId, isNeedToBeCreator, isNeedToHaveHigherRoleThanStudent)) {
@@ -437,4 +485,5 @@ public class SolutionController {
             );
         }
     }
+
 }

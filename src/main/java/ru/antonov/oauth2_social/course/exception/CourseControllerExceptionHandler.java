@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import ru.antonov.oauth2_social.config.ApiError;
-import ru.antonov.oauth2_social.solution.exception.*;
+
 
 @ControllerAdvice
 @Slf4j

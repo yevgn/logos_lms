@@ -38,18 +38,18 @@ public class DtoFactory {
                 .build();
     }
 
-    public static SolutionsGroupByUserShortResponseDto makeSolutionsGroupByUserShortResponseDto(
-            User user, List<Solution> solutions
-    ){
-        return SolutionsGroupByUserShortResponseDto.builder()
-                .user(ru.antonov.oauth2_social.user.dto.DtoFactory.makeUserShortResponseDto(user))
-                .solutions(
-                        solutions.stream()
-                                .map(DtoFactory::makeSolutionShortResponseDto)
-                                .toList()
-                )
+    public static SolutionWithTaskShortResponseDto makeSolutionWithTaskShortResponseDto(Solution solution){
+        return SolutionWithTaskShortResponseDto
+                .builder()
+                .id(solution.getId())
+                .status(solution.getStatus())
+                .submittedAt(solution.getSubmittedAt())
+                .mark(solution.getMark())
+                .reviewedAt(solution.getReviewedAt())
+                .task(ru.antonov.oauth2_social.task.dto.DtoFactory.makeTaskShortResponseDto(solution.getTask()))
                 .build();
     }
+
 
     public static SolutionWithUserShortResponseDto makeSolutionWithUserShortResponseDto(Solution solution){
         return SolutionWithUserShortResponseDto
@@ -73,6 +73,18 @@ public class DtoFactory {
                                 .map(DtoFactory::makeSolutionWithUserShortResponseDto)
                                 .toList()
                 )
+                .build();
+    }
+
+    public static SolutionCommentResponseDto makeSolutionCommentResponseDto(
+            Solution.SolutionComment comment, User author
+    ){
+        return SolutionCommentResponseDto
+                .builder()
+                .id(comment.getId())
+                .text(comment.getText())
+                .publishedAt(comment.getPublishedAt())
+                .author(author == null ? null : ru.antonov.oauth2_social.user.dto.DtoFactory.makeUserShortResponseDto(author))
                 .build();
     }
 }

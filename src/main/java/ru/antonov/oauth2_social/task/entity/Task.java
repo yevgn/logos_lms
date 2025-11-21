@@ -32,7 +32,7 @@ public class Task {
     private Course course;
 
     @ManyToOne
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "creator_id")
     private User creator;
 
     private String title;

@@ -51,11 +51,19 @@ public class Solution {
     @Convert(converter = SolutionContentJsonConverter.class)
     private List<Content> content = new ArrayList<>();
 
-    @Version
+    @Column(name = "solution_comments", columnDefinition = "varchar")
+    @Convert(converter = SolutionCommentsJsonConverter.class)
+    private List<SolutionComment> comments = new ArrayList<>();
+
+   @Version
     private Long version;
 
     public void addContent(List<Content> content){
         this.content.addAll(content);
+    }
+
+    public void addComments(List<SolutionComment> comments){
+        this.comments.addAll(comments);
     }
 
     @Override
@@ -93,5 +101,29 @@ public class Solution {
                 ", mark=" + mark +
                 ", content=" + content +
                 '}';
+    }
+
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Getter
+    @Setter
+    public static class SolutionComment{
+        private UUID id;
+        private UUID userId;
+        private String text;
+        private LocalDateTime publishedAt;
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            SolutionComment that = (SolutionComment) o;
+            return Objects.equals(id, that.id);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(id);
+        }
     }
 }

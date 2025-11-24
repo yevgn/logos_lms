@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import ru.antonov.oauth2_social.user.entity.Role;
 
 import java.util.UUID;
 
@@ -21,4 +22,6 @@ public class UserShortResponseDto {
     private String patronymic;
 
     private String group;
+
+    private Role role;
 }

@@ -11,7 +11,11 @@ import java.util.UUID;
 
 @Repository
 public interface CourseRepository extends JpaRepository<Course, UUID> {
-    @Query(value = "SELECT c FROM Course c WHERE c.institution.id = :institutionId")
+    @Query("""
+            SELECT c FROM Course c
+            JOIN FETCH c.institution
+            WHERE c.institution.id = :institutionId
+            """)
     List<Course> findAllByInstitutionId(UUID institutionId);
 
     @Query("""

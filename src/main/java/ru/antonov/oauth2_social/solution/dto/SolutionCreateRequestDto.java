@@ -19,6 +19,6 @@ import java.util.List;
 @UniqueFileNames
 public class SolutionCreateRequestDto implements HasContentFiles {
     @Size(max = 5, message = "Нельзя загрузить больше 5 файлов за один раз")
-    @NotEmpty(message = "Поле content не может быть пустым")
+    @NotEmpty(message = "Поле content не может быть пустым или отсутствовать")
     private List<MultipartFile> content;
 }

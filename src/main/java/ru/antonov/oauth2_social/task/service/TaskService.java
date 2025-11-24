@@ -1,6 +1,7 @@
 package ru.antonov.oauth2_social.task.service;
 
 import jakarta.persistence.OptimisticLockException;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,13 +18,12 @@ import ru.antonov.oauth2_social.course.exception.*;
 import ru.antonov.oauth2_social.course.service.CourseLimitCounter;
 import ru.antonov.oauth2_social.course.service.CourseService;
 import ru.antonov.oauth2_social.common.FileService;
-import ru.antonov.oauth2_social.task.dto.DtoFactory;
+import ru.antonov.oauth2_social.solution.dto.SolutionCommentCreateRequestDto;
+import ru.antonov.oauth2_social.solution.entity.Solution;
+import ru.antonov.oauth2_social.solution.exception.SolutionCommentAmountLimitExceededEx;
+import ru.antonov.oauth2_social.task.dto.*;
 import ru.antonov.oauth2_social.task.repository.TaskRepository;
 import ru.antonov.oauth2_social.exception.*;
-import ru.antonov.oauth2_social.task.dto.TaskCreateRequestDto;
-import ru.antonov.oauth2_social.task.dto.TaskResponseDto;
-import ru.antonov.oauth2_social.task.dto.TaskShortResponseDto;
-import ru.antonov.oauth2_social.task.dto.TaskUpdateRequestDto;
 import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.task.entity.TaskUser;
 import ru.antonov.oauth2_social.task.entity.TaskUserKey;
@@ -58,6 +58,8 @@ public class TaskService {
     private int maxTaskAndMaterialFileAmountForCourse;
     @Value("${spring.application.course-limit-params.max-file-amount-for-task}")
     private int maxFileAmountForTask;
+    @Value("${spring.application.course-limit-params.max-comment-amount-for-task}")
+    private int maxCommentAmountForTask;
     @Value("${spring.application.file-storage.base-path}")
     private String basePath;
 
@@ -244,7 +246,9 @@ public class TaskService {
                 }
             });
 
-            if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(task.getCourse().getId(), newContent.size())) {
+            if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(
+                    task.getCourse().getId(), newContent.size() - pathToDeleteList.size()
+            )) {
                 throw new TaskAndCourseMaterialFileLimitForCourseExceededEx(
                         String.format("Ошибка при загрузке файлов. Превышено максимально " +
                                         "допустимое число файлов для этого курса - %s",
@@ -256,7 +260,7 @@ public class TaskService {
                         )
                 );
             } else if (courseLimitCounter.isFileAmountForTaskExceedsLimit(
-                    task.getCourse().getId(), task.getId(), newContent.size()
+                    task.getCourse().getId(), task.getId(), newContent.size() - pathToDeleteList.size()
             )) {
                 throw new TaskFileLimitExceededEx(
                         String.format("Ошибка при загрузке файлов. Превышено максимально допустимое число файлов" +
@@ -474,5 +478,85 @@ public class TaskService {
 
     public Optional<Task> findByIdWithSolutions(UUID taskId){
         return taskRepository.findByIdWithSolutions(taskId);
+    }
+
+    public void saveComment(User principal, UUID taskId, TaskCommentCreateRequestDto request) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Такого задания не существует",
+                        String.format("Ошибка при загрузке комментария к заданию пользователем %s. " +
+                                "Задания %s не существует", principal.getEmail(), taskId)
+                ));
+
+        if (courseLimitCounter.isCommentAmountForTaskExceedsLimit(taskId, 1)) {
+            throw new SolutionCommentAmountLimitExceededEx(
+                    String.format("Ошибка. Превышено максимальное число комментариев для задания - %s",
+                            maxCommentAmountForTask),
+                    String.format("Ошибка добавления комментария к заданию %s пользователем %s. Превышен лимит",
+                            taskId, principal.getId())
+            );
+        }
+
+        Task.TaskComment comment = Task.TaskComment.builder()
+                .id(UUID.randomUUID())
+                .userId(principal.getId())
+                .text(request.getText())
+                .publishedAt(LocalDateTime.now())
+                .build();
+
+        task.addComments(List.of(comment));
+
+        try {
+            taskRepository.save(task);
+        } catch (OptimisticLockException ex) {
+            throw new EntityLockEx(
+                    "Ошибка. Задание было изменено. Повторите попытку",
+                    String.format("Ошибка при добавлении комментария к заданию %s пользователем %s. Задание было " +
+                            "изменено другим пользователем", task.getId(), principal.getId())
+            );
+        }
+    }
+
+    public List<TaskCommentResponseDto> findCommentsByTaskId(User principal, UUID taskId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Такого задания не существует",
+                        String.format("Ошибка при поиске комментариев к заданию пользователем %s. " +
+                                "Задания %s не существует", principal.getEmail(), taskId)
+                ));
+
+        return task.getComments().stream().map(c -> {
+                    User author = userService.findById(c.getUserId()).orElse(null);
+                    return DtoFactory.makeTaskCommentResponseDto(c, author);
+                })
+                .toList();
+    }
+
+    public void deleteComment(User principal, UUID taskId, UUID commentId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Такого задания не существует",
+                        String.format("Ошибка при удалении комментария к заданию пользователем %s. " +
+                                "Задания %s не существует", principal.getEmail(), taskId)
+                ));
+
+        List<Task.TaskComment> comments = task.getComments();
+
+        task.setComments(
+                comments.
+                        stream()
+                        .filter(s -> !s.getId().equals(commentId))
+                        .toList()
+        );
+
+        try {
+            taskRepository.save(task);
+        } catch (OptimisticLockException ex) {
+            throw new EntityLockEx(
+                    "Ошибка. Задание было изменено. Повторите попытку",
+                    String.format("Ошибка при удалении комментария к заданию %s пользователем %s. Решение было " +
+                            "изменено другим пользователем", task.getId(), principal.getId())
+            );
+        }
     }
 }

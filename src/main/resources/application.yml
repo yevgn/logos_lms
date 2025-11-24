@@ -2,7 +2,7 @@ spring:
   datasource:
     url:   jdbc:postgresql://localhost:5432/logos
     username: postgres
-    password: root
+    password:  root
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -42,6 +42,7 @@ spring:
         max-solution-file-amount-for-course: 4000
         max-user-amount-for-course: 101
         max-comment-amount-for-solution: 20
+        max-comment-amount-for-task: 20
     file-storage:
       base-path: D:\logos-lms
 

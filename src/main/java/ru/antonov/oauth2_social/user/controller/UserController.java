@@ -618,10 +618,42 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/institution")
+    @Operation(
+            summary = "Получении информации об учебном заведении по id пользователя",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление учебными заведениями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому пользователю"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Пользователя с указанным id не существует"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @GetMapping("/{userId}/institution")
     public ResponseEntity<InstitutionResponseDto> findInstitutionByUserId(
             @AuthenticationPrincipal User principal,
-            @RequestParam("user_id") UUID userId
+            @PathVariable UUID userId
     ){
         User user = userService.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundEx(

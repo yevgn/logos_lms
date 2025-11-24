@@ -44,7 +44,6 @@ public class Course {
     @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
     private Set<CourseMaterial> courseMaterials = new HashSet<>();
 
-
     @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
     private Set<Task> tasks = new HashSet<>();
 

@@ -46,10 +46,10 @@ public class User implements UserDetails {
     @JoinColumn(name = "institution_id")
     private Institution institution;
 
-    @OneToMany(mappedBy = "user", orphanRemoval = true)
+    @OneToMany(mappedBy = "user", cascade = CascadeType.REMOVE, orphanRemoval = true)
     private Set<CourseUser> courseUsers;
 
-    @OneToMany(mappedBy = "user", orphanRemoval = true)
+    @OneToMany(mappedBy = "user", cascade = CascadeType.REMOVE, orphanRemoval = true)
     private Set<Solution> solutions;
 
     @ManyToOne

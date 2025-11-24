@@ -27,6 +27,17 @@ public class DtoFactory {
                 .build();
     }
 
+    public static CourseShortResponseDto makeCourseShortResponseDto(Course course, User creator) {
+        return CourseShortResponseDto
+                .builder()
+                .id(course.getId())
+                .createdAt(course.getCreatedAt())
+                .name(course.getName())
+                .institution(ru.antonov.oauth2_social.user.dto.DtoFactory.makeInstitutionShortResponseDto(course.getInstitution()))
+                .creator(creator == null ? null : ru.antonov.oauth2_social.user.dto.DtoFactory.makeUserShortResponseDto(creator))
+                .build();
+    }
+
 
     public static CourseMaterialResponseDto makeCourseMaterialResponseDto(CourseMaterial courseMaterial) {
         return CourseMaterialResponseDto

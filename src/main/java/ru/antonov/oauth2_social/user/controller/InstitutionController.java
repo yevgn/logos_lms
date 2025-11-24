@@ -102,10 +102,10 @@ public class InstitutionController {
                     ))
     }
     )
-    @GetMapping
+    @GetMapping("/{institutionId}")
     public ResponseEntity<InstitutionResponseDto> findInstitutionById(
             @AuthenticationPrincipal User principal,
-            @RequestParam("institution_id") UUID institutionId
+            @PathVariable UUID institutionId
     ){
         checkPrincipalHasAccessToInstitutionOrElseThrow(principal, institutionId);
 
@@ -144,10 +144,10 @@ public class InstitutionController {
                     ))
     }
     )
-    @GetMapping("/users")
+    @GetMapping("/{institutionId}/users")
     public ResponseEntity<List<UserShortResponseDto>> findUsersByInstitutionId(
             @AuthenticationPrincipal User principal,
-            @RequestParam("institution_id") UUID institutionId
+            @PathVariable UUID institutionId
     ) {
         checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
 
@@ -192,11 +192,11 @@ public class InstitutionController {
                     ))
     }
     )
-    @GetMapping("/users/group")
+    @GetMapping("/{institutionId}/group/{groupId}/users")
     public ResponseEntity<List<UserShortResponseDto>> findUsersByInstitutionIdAndGroup(
             @AuthenticationPrincipal User principal,
-            @RequestParam("institution_id") UUID institutionId,
-            @RequestParam("group") String group
+            @PathVariable UUID institutionId,
+            @PathVariable String group
     ) {
         checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
 

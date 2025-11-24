@@ -56,39 +56,6 @@ public class SecurityConfig {
         return urlBasedConfig;
     }
 
-//
-//    @Bean
-//    public CorsFilter corsFilter() {
-//        final UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-//        final CorsConfiguration config = new CorsConfiguration();
-//        config.setAllowCredentials(true);
-//        config.setAllowedOrigins(Collections.singletonList("http://localhost:4200"));
-//        config.setAllowedHeaders(Arrays.asList(
-//                ORIGIN,
-//                CONTENT_TYPE,
-//                ACCEPT,
-//                AUTHORIZATION
-//        ));
-//        config.setAllowedMethods(Arrays.asList(
-//                GET.name(),
-//                POST.name(),
-//                DELETE.name(),
-//                PUT.name(),
-//                PATCH.name()
-//        ));
-//        source.registerCorsConfiguration("/**", config);
-//        return new CorsFilter(source);
-//
-//    }//                DELETE.name(),
-
-    /// /                PUT.name(),
-    /// /                PATCH.name()
-    /// /        ));
-    /// /        source.registerCorsConfiguration("/**", config);
-    /// /        return new CorsFilter(source);
-    /// /
-    /// /    }
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -112,14 +79,8 @@ public class SecurityConfig {
                                 .hasAnyRole(Role.ADMIN.name())
                                 .requestMatchers(HttpMethod.POST, "/users/batch")
                                 .hasAnyRole(Role.ADMIN.name())
-
-                                .requestMatchers(HttpMethod.GET, "/users/id")
-                                .authenticated()
                                 .requestMatchers(HttpMethod.DELETE, "/users/id")
                                 .hasRole(Role.ADMIN.name())
-
-                                .requestMatchers(HttpMethod.GET, "/users/email")
-                                .authenticated()
                                 .requestMatchers(HttpMethod.DELETE, "/users/email")
                                 .hasRole(Role.ADMIN.name())
 
@@ -127,70 +88,65 @@ public class SecurityConfig {
                                 .hasAnyRole(Role.ADMIN.name())
                                 .requestMatchers(HttpMethod.POST, "/groups/batch")
                                 .hasAnyRole(Role.ADMIN.name())
-
-                                .requestMatchers(HttpMethod.DELETE, "/groups/id")
+                                .requestMatchers(HttpMethod.DELETE, "/groups/{groupId}")
                                 .hasAnyRole(Role.ADMIN.name())
 
                                 .requestMatchers(HttpMethod.POST, "/institutions")
                                 .hasRole(Role.ADMIN.name())
-                                .requestMatchers(HttpMethod.GET, "/institutions")
-                                .authenticated()
-                                .requestMatchers("/institutions/users")
-                                .authenticated()
-                                .requestMatchers("/institutions/users/group")
-                                .authenticated()
 
                                 .requestMatchers(HttpMethod.POST, "/courses/user-id-list")
-                                .hasRole(Role.TUTOR.name())
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
                                 .requestMatchers(HttpMethod.POST, "/courses/group-id-list")
-                                .hasRole(Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.POST, "/courses/*/add-users/user-id-list")
-                                .hasRole(Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.POST, "/courses/*/add-users/group-id-list")
-                                .hasRole(Role.TUTOR.name())
-                                .requestMatchers("/courses/*/remove-users/user-id-list")
-                                .hasRole(Role.TUTOR.name())
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
+                                .requestMatchers(HttpMethod.POST, "/courses/{courseId}/add-users/user-id-list")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
+                                .requestMatchers(HttpMethod.POST, "/courses/{courseId}/add-users/group-id-list")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
+                                .requestMatchers("/courses/{courseId}/remove-users/user-id-list")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
                                 .requestMatchers(HttpMethod.DELETE, "/courses")
-                                .hasRole(Role.TUTOR.name())
-                                .requestMatchers("/courses/*/edit-name")
-                                .hasRole(Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.GET, "/courses/institution")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
+                                .requestMatchers("/courses/{courseId}/edit-name")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
+                                .requestMatchers(HttpMethod.GET, "/courses/institution/{institutionId}")
                                 .hasRole(Role.ADMIN.name())
-                                .requestMatchers(HttpMethod.POST, "/courses/*/materials")
-                                .hasRole(Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.DELETE, "/courses/*/materials")
-                                .hasRole(Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.PATCH, "/courses/*/materials")
-                                .hasRole(Role.TUTOR.name())
+                                .requestMatchers(HttpMethod.POST, "/courses/{courseId}/materials")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
+                                .requestMatchers(HttpMethod.DELETE, "/courses/{courseId}/materials")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
+                                .requestMatchers(HttpMethod.PATCH, "/courses/{courseId}/materials")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
+                                .requestMatchers(HttpMethod.GET, "/courses/{courseId}/users/not")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
 
                                 .requestMatchers(HttpMethod.POST, "/tasks/**")
-                                .hasRole(Role.TUTOR.name())
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
                                 .requestMatchers(HttpMethod.PATCH, "/tasks/**")
-                                .hasRole(Role.TUTOR.name())
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
                                 .requestMatchers(HttpMethod.DELETE, "/tasks/**")
-                                .hasRole(Role.TUTOR.name())
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
 
-                                .requestMatchers(HttpMethod.POST, "/solutions/task/*")
+                                .requestMatchers(HttpMethod.POST, "/solutions/task/{taskId}")
                                 .hasRole(Role.STUDENT.name())
-                                .requestMatchers(HttpMethod.POST, "/solutions/*/revoke")
+                                .requestMatchers(HttpMethod.POST, "/solutions/{solutionId}/revoke")
                                 .hasRole(Role.STUDENT.name())
-                                .requestMatchers(HttpMethod.PATCH, "/solutions/*")
+                                .requestMatchers(HttpMethod.PATCH, "/solutions/{solutionId}")
                                 .hasRole(Role.STUDENT.name())
-                                .requestMatchers(HttpMethod.DELETE, "/solutions/*")
+                                .requestMatchers(HttpMethod.DELETE, "/solutions/{solutionId}")
                                 .hasRole(Role.STUDENT.name())
-                                .requestMatchers(HttpMethod.POST, "/solutions/*/review")
-                                .hasRole(Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.GET, "/solutions/task/*/batch")
+                                .requestMatchers(HttpMethod.POST, "/solutions/{solutionId}/review")
+                                .hasAnyRole(Role.TUTOR.name(), Role.ADMIN.name())
+                                .requestMatchers(HttpMethod.GET, "/solutions/task/{taskId}/batch")
                                 .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.GET, "/solutions/task/*/batch/unreviewed")
+                                .requestMatchers(HttpMethod.GET, "/solutions/task/{taskId}/batch/unreviewed")
                                 .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.GET, "/solutions/task/*/batch/reviewed")
+                                .requestMatchers(HttpMethod.GET, "/solutions/task/{taskId}/batch/reviewed")
                                 .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.GET, "/solutions/course/*/batch")
+                                .requestMatchers(HttpMethod.GET, "/solutions/course/{courseId}/batch")
                                 .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.GET, "/solutions/course/*/batch/unreviewed")
+                                .requestMatchers(HttpMethod.GET, "/solutions/course/{courseId}/batch/unreviewed")
                                 .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
-                                .requestMatchers(HttpMethod.GET, "/solutions/course/*/batch/reviewed")
+                                .requestMatchers(HttpMethod.GET, "/solutions/course/{courseId}/batch/reviewed")
                                 .hasAnyRole(Role.ADMIN.name(), Role.TUTOR.name())
 
                                 .requestMatchers(WHITE_LIST_URL)
@@ -203,7 +159,7 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authenticationProvider(authenticationProvider)
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);;
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

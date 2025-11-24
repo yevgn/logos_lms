@@ -1,6 +1,7 @@
 package ru.antonov.oauth2_social.course.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -15,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.data.repository.query.Param;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 import ru.antonov.oauth2_social.config.AccessManager;
 import ru.antonov.oauth2_social.course.dto.*;
 
+import ru.antonov.oauth2_social.course.entity.Course;
 import ru.antonov.oauth2_social.course.entity.CourseMaterial;
 import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.course.service.CourseService;
@@ -45,6 +47,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -63,7 +66,7 @@ public class CourseController {
 
     @Operation(
             summary = "Добавление курса по списку id пользователей",
-            description = "Требуется роль TUTOR. В курс будут добавлены пользователи, найденные по списку id",
+            description = "Требуется роль TUTOR или ADMIN. В курс будут добавлены пользователи, найденные по списку id",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -100,17 +103,6 @@ public class CourseController {
                                         {
                                           "status" : "409",
                                           "message": "Ошибка. В данном учебном заведении уже существует курс с таким названием"
-                                        }
-                                    """)
-                    )),
-            @ApiResponse(responseCode = "500",
-                    description = "Ошибка при отправке сообщения о добавлении пользователя в курс на SMTP-сервер",
-                    content = @io.swagger.v3.oas.annotations.media.Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "500",
-                                          "message": "Ошибка на сервере"
                                         }
                                     """)
                     ))
@@ -128,7 +120,7 @@ public class CourseController {
 
     @Operation(
             summary = "Добавление курса по списку id учебных групп",
-            description = "Требуется роль TUTOR. В курс будут добавлены пользователи из учебных групп из списка id",
+            description = "Требуется роль TUTOR или ADMIN. В курс будут добавлены пользователи из учебных групп из списка id",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -167,17 +159,6 @@ public class CourseController {
                                           "message": "Ошибка. В данном учебном заведении уже существует курс с таким названием"
                                         }
                                     """)
-                    )),
-            @ApiResponse(responseCode = "500",
-                    description = "Ошибка при отправке сообщения о добавлении пользователя в курс на SMTP-сервер",
-                    content = @io.swagger.v3.oas.annotations.media.Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "500",
-                                          "message": "Ошибка на сервере"
-                                        }
-                                    """)
                     ))
     }
     )
@@ -193,7 +174,7 @@ public class CourseController {
 
     @Operation(
             summary = "Изменение названия курса",
-            description = "Требуется роль TUTOR",
+            description = "Требуется роль TUTOR или ADMIN",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -246,14 +227,14 @@ public class CourseController {
             String newName
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, true, true);
-        courseService.changeCourse(courseId, newName);
+        courseService.changeCourse(principal, courseId, newName);
 
         return ResponseEntity.ok().build();
     }
 
     @Operation(
             summary = "Удаление курса по id",
-            description = "Требуется роль TUTOR",
+            description = "Требуется роль TUTOR или ADMIN",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -281,13 +262,24 @@ public class CourseController {
                                           "message": "Параметр course_id не может отсутствовать"
                                         }
                                     """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Конфликт версий данных",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Курс был изменен. Повторите попытку"
+                                        }
+                                    """)
                     ))
     }
     )
-    @DeleteMapping
+    @DeleteMapping("/{courseId}")
     public ResponseEntity<?> deleteCourse(
             @AuthenticationPrincipal User principal,
-            @RequestParam("course_id") UUID courseId
+            @PathVariable UUID courseId
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, true, true);
         courseService.deleteById(courseId);
@@ -297,7 +289,7 @@ public class CourseController {
 
     @Operation(
             summary = "Добавление пользователей в курс",
-            description = "Требуется роль TUTOR. В курс будут добавлены пользователи, найденные по списку id",
+            description = "Требуется роль TUTOR или ADMIN. В курс будут добавлены пользователи, найденные по списку id",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -359,12 +351,12 @@ public class CourseController {
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
-        return ResponseEntity.ok(courseService.addUsersToCourseByUserIdList(courseId, userIdList, principal));
+        return ResponseEntity.ok(courseService.addUsersToCourseByUserIdList(principal, courseId, userIdList, principal));
     }
 
     @Operation(
             summary = "Добавление пользователей в курс",
-            description = "Требуется роль TUTOR. В курс будут добавлены пользователи из учебных групп по списку id",
+            description = "Требуется роль TUTOR или ADMIN. В курс будут добавлены пользователи из учебных групп по списку id",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -426,12 +418,13 @@ public class CourseController {
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
-        return ResponseEntity.ok(courseService.addUsersToCourseByGroupIdList(courseId, groupIdList, principal));
+        return ResponseEntity.ok(courseService.addUsersToCourseByGroupIdList(principal, courseId, groupIdList, principal));
     }
+
 
     @Operation(
             summary = "Удаление пользователей из курса",
-            description = "Требуется роль TUTOR. Из курса будут удалены пользователи по списку id",
+            description = "Требуется роль TUTOR или ADMIN. Из курса будут удалены пользователи по списку id",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -457,6 +450,17 @@ public class CourseController {
                                         {
                                           "status" : "400",
                                           "message": "Ошибка. Курса с указанным id не существует"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Конфликт версий данных",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Курс был изменен. Повторите попытку"
                                         }
                                     """)
                     ))
@@ -507,10 +511,10 @@ public class CourseController {
                     ))
     }
     )
-    @GetMapping
+    @GetMapping("/{courseId}")
     public ResponseEntity<CourseResponseDto> getCourseInfo(
             @AuthenticationPrincipal User principal,
-            @RequestParam("course_id") UUID courseId
+            @PathVariable UUID courseId
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
 
@@ -550,10 +554,10 @@ public class CourseController {
                     ))
     }
     )
-    @GetMapping("/institution")
+    @GetMapping("/institution/{institutionId}")
     public ResponseEntity<List<CourseResponseDto>> getCoursesByInstitutionId(
             @AuthenticationPrincipal User principal,
-            @RequestParam("institution_id") UUID institutionId
+            @PathVariable UUID institutionId
     ) {
         checkPrincipalHasAccessToInstitutionOrElseThrow(principal, institutionId);
 
@@ -577,22 +581,33 @@ public class CourseController {
                             examples = @ExampleObject(value = """
                                         {
                                           "status" : "403",
-                                          "message": "Ошибка доступа. У вас нет доступа к этому учебному заведению"
+                                          "message": "Ошибка доступа. У вас нет доступа к этому пользователю"
                                         }
                                     """)
                     ))
     }
     )
-    @GetMapping("/user")
-    public ResponseEntity<List<CourseResponseDto>> getCoursesByUserId(
-            @AuthenticationPrincipal User principal
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<CourseShortResponseDto>> getCoursesByUserId(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID userId
     ) {
-        return ResponseEntity.ok(courseService.findCoursesByUser(principal));
+
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Пользователя с указанным id не существует",
+                        String.format("Ошибка при поиске курсов по id пользователя пользователем %s" +
+                                ". Пользователя с id %s не существует", principal.getId(), userId)
+                ));
+
+        checkPrincipalHasAccessToOtherOrElseThrow(principal, user, true, true);
+
+        return ResponseEntity.ok(courseService.findCoursesByUserId(principal, userId));
     }
 
     @Operation(
             summary = "Добавление учебных материалов в курс",
-            description = "Требуется роль TUTOR",
+            description = "Требуется роль TUTOR или ADMIN",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -621,6 +636,17 @@ public class CourseController {
                                         }
                                     """)
                     )),
+            @ApiResponse(responseCode = "409",
+                    description = "Конфликт версий данных",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Курс был изменен. Повторите попытку"
+                                        }
+                                    """)
+                    )),
             @ApiResponse(responseCode = "500",
                     description = "Ошибка при сохранении файлов на диск",
                     content = @io.swagger.v3.oas.annotations.media.Content(
@@ -646,8 +672,8 @@ public class CourseController {
     }
 
     @Operation(
-            summary = "Удаление учебноно материала по id",
-            description = "Требуется роль TUTOR. Удалить учебный материал может только создатель курса",
+            summary = "Удаление учебного материала по id",
+            description = "Требуется роль TUTOR или ADMIN. Удалить учебный материал может только создатель курса",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -673,6 +699,17 @@ public class CourseController {
                                         {
                                           "status" : "400",
                                           "message": "Ошибка. Учебный материал не найден"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Конфликт версий данных",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Учебный материал был изменен. Повторите попытку"
                                         }
                                     """)
                     )),
@@ -712,8 +749,8 @@ public class CourseController {
     }
 
     @Operation(
-            summary = "Обновление учебноно материала по id",
-            description = "Требуется роль TUTOR. Обновить материал может только тот преподаватель, который его выложил",
+            summary = "Обновление учебного материала по id",
+            description = "Требуется роль TUTOR или ADMIN. Обновить материал может только тот преподаватель, который его выложил",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -739,6 +776,17 @@ public class CourseController {
                                         {
                                           "status" : "400",
                                           "message": "Ошибка. Учебный материал не найден"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Конфликт версий данных",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Учебный материал был изменен. Повторите попытку"
                                         }
                                     """)
                     )),
@@ -868,7 +916,9 @@ public class CourseController {
             @PathVariable UUID courseId,
             @PathVariable UUID materialId,
             @PathVariable UUID fileId,
-            @Param(value = "Флаг. Если download = true, то файл будет скачан, если false - в режиме просмотра")
+            @Parameter(
+                    description = "Флаг. Если true - скачивание, false - просмотр"
+            )
             @RequestParam(required = false, defaultValue = "false") boolean download
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
@@ -1053,10 +1103,10 @@ public class CourseController {
                     ))
     }
     )
-    @GetMapping("/users")
+    @GetMapping("/{courseId}/users")
     public ResponseEntity<List<UserShortResponseDto>> findUsersByCourseId(
             @AuthenticationPrincipal User principal,
-            @RequestParam("course_id") UUID courseId
+            @PathVariable UUID courseId
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
 
@@ -1070,8 +1120,10 @@ public class CourseController {
     }
 
     @Operation(
-            summary = "Получение информации о пользователях из учебного заведения с указанным id, " +
-                    "которые не состоят в курсе с указанным id",
+            summary = "Получение информации о пользователях" +
+                    ", которые не состоят в курсе с указанным id",
+            description = "В теле ответа будут пользователи все пользователи из учебного заведения, которые " +
+                    "не состоят в курсе с указанным id",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление пользователями")
@@ -1102,16 +1154,21 @@ public class CourseController {
                     ))
     }
     )
-    @GetMapping("/users/not")
+    @GetMapping("/{courseId}/users/not")
     public ResponseEntity<List<UserShortResponseDto>> findUsersByCourseIdNot(
             @AuthenticationPrincipal User principal,
-            @RequestParam("institution_id") UUID institutionId,
-            @RequestParam("course_id") UUID courseId
+            @PathVariable UUID courseId
     ) {
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
-        checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
+        Course course = courseService.findById(courseId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Такого курса не существует",
+                        String.format("Ошибка при пользователей - не членов курса пользователем %s" +
+                                ". Курса с id %s не существует", principal.getId(), courseId)
+                ));
 
-        List<User> users = userService.findAllByInstitutionIdNotInCourse(institutionId, courseId);
+        List<User> users = userService.findAllByInstitutionIdNotInCourse(course.getInstitution().getId(), courseId);
 
         return ResponseEntity.ok(
                 users.stream()
@@ -1172,6 +1229,20 @@ public class CourseController {
         }
     }
 
+    private void checkPrincipalHasAccessToOtherOrElseThrow(User user, User other, boolean isNeedToHaveHigherPriority,
+                                                      boolean isNeedToBeInOneInstitute) {
+        if (Objects.equals(user.getId(), other.getId())) {
+            return;
+        }
+
+        if (!accessManager.isUserHasAccessToOther(user, other, isNeedToHaveHigherPriority, isNeedToBeInOneInstitute)) {
+            throw new AccessDeniedEx(
+                    "Ошибка доступа. Вы не имеете доступа к этому пользователю",
+                    String.format("Пользователю %s не разрешен доступ к пользователю %s", user.getEmail(), other.getEmail())
+            );
+        }
+    }
+
     private void checkPrincipalHasAccessToInstitutionOrElseThrow(User user, UUID institutionId) {
         if (!accessManager.isUserHasAccessToInstitution(user, institutionId)) {
             throw new AccessDeniedEx(
@@ -1181,13 +1252,5 @@ public class CourseController {
         }
     }
 
-    private void checkUserHasAccessToInstitutionOrElseThrow(User user, UUID institutionId) {
-        if (!accessManager.isUserHasAccessToInstitution(user, institutionId)) {
-            throw new AccessDeniedEx(
-                    "Ошибка доступа. Вы не имеете доступа к этому учебному заведению.",
-                    String.format("Пользователю %s не разрешен доступ к учебному заведению %s", user.getEmail(), institutionId)
-            );
-        }
-    }
 
 }

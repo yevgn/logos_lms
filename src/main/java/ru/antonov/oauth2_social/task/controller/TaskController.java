@@ -1,7 +1,9 @@
 package ru.antonov.oauth2_social.task.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -23,11 +25,9 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import ru.antonov.oauth2_social.config.AccessManager;
-import ru.antonov.oauth2_social.task.dto.TaskCreateRequestDto;
-import ru.antonov.oauth2_social.task.dto.TaskResponseDto;
 
-import ru.antonov.oauth2_social.task.dto.TaskShortResponseDto;
-import ru.antonov.oauth2_social.task.dto.TaskUpdateRequestDto;
+import ru.antonov.oauth2_social.task.dto.*;
+
 import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.course.entity.Course;
 
@@ -239,13 +239,13 @@ public class TaskController {
                                     """)
                     )),
             @ApiResponse(responseCode = "409",
-                    description = "Конфликт версий данныз",
+                    description = "Конфликт версий данных",
                     content = @io.swagger.v3.oas.annotations.media.Content(
                             mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                         {
                                           "status" : "409",
-                                          "message": "Задание было удалено другим пользователем"
+                                          "message": "Задание было изменено другим пользователем"
                                         }
                                     """)
                     )),
@@ -432,7 +432,7 @@ public class TaskController {
     }
 
     @Operation(
-            summary = "Просмотр/скачивание файл из заданий по fileId",
+            summary = "Просмотр/скачивание файла с id fileId из задания с id taskId",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Просмотр/скачивание файлов")
@@ -479,7 +479,9 @@ public class TaskController {
             @AuthenticationPrincipal User principal,
             @PathVariable UUID taskId,
             @PathVariable UUID fileId,
-            @Param(value = "Флаг. Если download = true, то файл будет скачан, если false - в режиме просмотра")
+            @Parameter(
+                    description = "Флаг. Если true - скачивание, false - просмотр"
+            )
             @RequestParam(required = false, defaultValue = "false") boolean download
     ) {
         checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
@@ -609,6 +611,162 @@ public class TaskController {
         }
     }
 
+    @Operation(
+            summary = "Добавление комментария к заданию с указанным id",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление комментариями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому заданию"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Ошибка. Поле text не может отсутствовать"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Конфликт версий данных",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Задание было изменено другим пользователем"
+                                        }
+                                    """)
+                    )),
+    }
+    )
+    @PostMapping("/{taskId}/comments")
+    public ResponseEntity<?> saveComment(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID taskId,
+            @Valid @RequestBody TaskCommentCreateRequestDto request
+    ) {
+
+        checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
+
+        taskService.saveComment(principal, taskId, request);
+
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(
+            summary = "Получение комментариев к заданию с указанным id",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление комментариями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому заданию"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Ошибка. Такого задания не существует"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @GetMapping("/{taskId}/comments")
+    public ResponseEntity<List<TaskCommentResponseDto>> findCommentsByTaskId(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID taskId
+    ) {
+        checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
+
+        return ResponseEntity.ok(taskService.findCommentsByTaskId(principal, taskId));
+    }
+
+    @Operation(
+            summary = "Удаление комментария по id задания и id комментария",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление комментариями")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этому комментарию"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Ошибка. Такого задания не существует"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "409",
+                    description = "Конфликт версий данных",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "409",
+                                          "message": "Задание было изменено другим пользователем"
+                                        }
+                                    """)
+                    )),
+    }
+    )
+    @DeleteMapping("/{taskId}/comments/{commentId}")
+    public ResponseEntity<?> deleteCommentById(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID taskId,
+            @PathVariable UUID commentId
+    ) {
+
+        checkPrincipalHasAccessToComment(principal, taskId, commentId);
+
+        taskService.deleteComment(principal, taskId, commentId);
+
+        return ResponseEntity.ok().build();
+    }
+
     private void checkPrincipalHasAccessToCourseOrElseThrow(
             User principal, UUID courseId, boolean isNeedToBeCreator, boolean isNeedToHaveHigherRoleThanStudent) {
         if (!accessManager.isUserHasAccessToCourse(principal, courseId, isNeedToBeCreator, isNeedToHaveHigherRoleThanStudent)) {
@@ -626,6 +784,16 @@ public class TaskController {
                     "Ошибка доступа. У вас нет доступа к этому заданию",
                     String.format("Отказ в доступе к заданию. Пользователь %s не имеет доступа к заданию %s",
                             principal.getEmail(), taskId)
+            );
+        }
+    }
+
+    private void checkPrincipalHasAccessToComment(User principal, UUID taskId, UUID commentId){
+        if(!accessManager.isPrincipalHasAccessToTaskComment(principal, taskId, commentId)){
+            throw new AccessDeniedEx(
+                    "Ошибка доступа. У вас нет доступа к этому комментарию",
+                    String.format("Отказ в доступе к комментарию к заданию. Пользователь %s не имеет доступа к комментарию %s",
+                            principal.getEmail(), commentId)
             );
         }
     }

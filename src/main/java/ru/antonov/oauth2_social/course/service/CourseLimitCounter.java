@@ -10,6 +10,8 @@ import ru.antonov.oauth2_social.exception.FileNotFoundEx;
 import ru.antonov.oauth2_social.exception.IOEx;
 import ru.antonov.oauth2_social.solution.entity.Solution;
 import ru.antonov.oauth2_social.solution.repository.SolutionRepository;
+import ru.antonov.oauth2_social.task.entity.Task;
+import ru.antonov.oauth2_social.task.repository.TaskRepository;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,11 +38,14 @@ public class CourseLimitCounter {
     private int maxFileAmountForSolution;
     @Value("${spring.application.course-limit-params.max-comment-amount-for-solution}")
     private int maxCommentAmountForSolution;
+    @Value("${spring.application.course-limit-params.max-comment-amount-for-task}")
+    private int maxCommentAmountForTask;
     @Value("${spring.application.file-storage.base-path}")
     private String basePath;
 
     private final CourseUserRepository courseUserRepository;
     private final SolutionRepository solutionRepository;
+    private final TaskRepository taskRepository;
 
     public boolean isTaskAndMaterialFileAmountForCourseExceedsLimit(UUID courseId, int fileAmountToUpload){
         return calculateTaskAndMaterialFileAmountForCourse(courseId) + fileAmountToUpload
@@ -55,9 +60,19 @@ public class CourseLimitCounter {
         return calculateCommentAmountForSolution(solutionId) + commentAmountToAdd > maxCommentAmountForSolution;
     }
 
+    public boolean isCommentAmountForTaskExceedsLimit(UUID taskId, int commentAmountToAdd){
+        return calculateCommentAmountForTask(taskId) + commentAmountToAdd > maxCommentAmountForSolution;
+    }
+
+
     private int calculateCommentAmountForSolution(UUID solutionId) {
         Optional<Solution> solutionOpt = solutionRepository.findById(solutionId);
         return solutionOpt.map(solution -> solution.getComments().size()).orElse(0);
+    }
+
+    private int calculateCommentAmountForTask(UUID taskId) {
+        Optional<Task> taskOpt = taskRepository.findById(taskId);
+        return taskOpt.map(t -> t.getComments().size()).orElse(0);
     }
 
     public boolean isFileAmountForCourseMaterialExceedsLimit(UUID courseId, UUID courseMaterialId, int fileAmountToUpload){

@@ -367,8 +367,15 @@ public class SolutionService {
         solution.setReviewer(principal);
         solution.setReviewedAt(LocalDateTime.now());
 
-        solutionRepository.saveAndFlush(solution);
-
+        try {
+            solutionRepository.saveAndFlush(solution);
+        } catch (OptimisticLockException ex) {
+            throw new EntityLockEx(
+                    "Ошибка. Решение было изменено. Повторите попытку",
+                    String.format("Ошибка при оценке решения пользователем %s. Решение %s было " +
+                            "изменено другим пользователем", principal.getId(), solution.getId())
+            );
+        }
         solutionEmailService.sendSolutionReviewedNotification(solution.getUser(), solution);
     }
 
@@ -642,6 +649,14 @@ public class SolutionService {
                                 "Решения %s не существует", principal.getEmail(), solutionId)
                 ));
 
+        if(solution.getStatus() == SolutionStatus.REVOKED){
+            throw new AttemptToGetRevokedSolutionEx(
+                    "Ошибка доступа. Это решение было отозвано пользователем",
+                    String.format("Ошибка при добавлении комментария пользователем %s. Решение %s было отозвано",
+                            principal.getEmail(), solution.getId())
+            );
+        }
+
         if (courseLimitCounter.isCommentAmountForSolutionExceedsLimit(solutionId, 1)) {
             throw new SolutionCommentAmountLimitExceededEx(
                     String.format("Ошибка. Превышено максимальное число комментариев для решения - %s",
@@ -679,6 +694,14 @@ public class SolutionService {
                                 "Решения %s не существует", principal.getEmail(), solutionId)
                 ));
 
+        if(solution.getStatus() == SolutionStatus.REVOKED){
+            throw new AttemptToGetRevokedSolutionEx(
+                    "Ошибка доступа. Это решение было отозвано пользователем",
+                    String.format("Ошибка при добавлении комментария пользователем %s. Решение %s было отозвано",
+                            principal.getEmail(), solution.getId())
+            );
+        }
+
         List<Solution.SolutionComment> comments = solution.getComments();
 
         solution.setComments(
@@ -706,6 +729,14 @@ public class SolutionService {
                         String.format("Ошибка при поиске комментариев к решению пользователем %s. " +
                                 "Решения %s не существует", principal.getEmail(), solutionId)
                 ));
+
+        if(solution.getStatus() == SolutionStatus.REVOKED){
+            throw new AttemptToGetRevokedSolutionEx(
+                    "Ошибка доступа. Это решение было отозвано пользователем",
+                    String.format("Ошибка при добавлении комментария пользователем %s. Решение %s было отозвано",
+                            principal.getEmail(), solution.getId())
+            );
+        }
 
         return solution.getComments().stream().map(c -> {
                     User author = userService.findById(c.getUserId()).orElse(null);

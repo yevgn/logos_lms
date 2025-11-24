@@ -190,7 +190,7 @@ public class GroupController {
                     ))
     }
     )
-    @GetMapping("/institution")
+    @GetMapping("/institution/{institutionId}")
     public ResponseEntity<List<GroupResponseDto>> findGroupsByInstitutionId(
             @AuthenticationPrincipal User principal,
             @RequestParam("institution_id") UUID institutionId
@@ -204,6 +204,48 @@ public class GroupController {
                         .map(DtoFactory::makeGroupResponseDto)
                         .toList()
         );
+    }
+
+    @Operation(
+            summary = "Получении информации об учебной группе с указанным id",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление группами")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. Вы не имеете доступа к этой группе"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Параметр group_id отсутствует"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @GetMapping("/{groupId}")
+    public ResponseEntity<GroupResponseDto> findGroupById(
+            @AuthenticationPrincipal User principal,
+            @RequestParam("group_id") UUID groupId
+    ){
+        checkUserHasAccessToGroupOrElseThrow(principal, groupId);
+
+        return ResponseEntity.ok(groupService.findGroupById(groupId));
     }
 
     @Operation(
@@ -239,10 +281,10 @@ public class GroupController {
                     ))
     }
     )
-    @DeleteMapping("/id")
+    @DeleteMapping("/{groupId}")
     public ResponseEntity<?> deleteGroupById(
             @AuthenticationPrincipal User principal,
-            @RequestParam("group_id") UUID groupId
+            @PathVariable UUID groupId
     ){
         Group group = groupService.findById(groupId)
                 .orElseThrow(() -> new EntityNotFoundEx(
@@ -272,6 +314,15 @@ public class GroupController {
             throw new AccessDeniedEx(
                     "Ошибка. У вас нет доступа к этому учебному заведению",
                     String.format("Отказ в доступе. Пользователю %s не разрешен доступ к институту %s", user.getEmail(), institutionId)
+            );
+        }
+    }
+
+    private void checkUserHasAccessToGroupOrElseThrow(User user, UUID groupId){
+        if(!accessManager.isUserHasAccessToGroup(user, groupId)){
+            throw new AccessDeniedEx(
+                    "Ошибка. У вас нет доступа к этой группе",
+                    String.format("Отказ в доступе. Пользователю %s не разрешен доступ к группе %s", user.getEmail(), groupId)
             );
         }
     }

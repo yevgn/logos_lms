@@ -69,7 +69,7 @@ public class CourseService {
         return courseRepository.findById(courseId);
     }
 
-    public void changeCourse(UUID courseId, String newName) {
+    public void changeCourse(User principal, UUID courseId, String newName) {
         Course course = findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         String.format("Ошибка. Курса с id %s не существует", courseId),
@@ -97,13 +97,19 @@ public class CourseService {
             }
 
             throw new DBConstraintViolationEx(message, debugMessage);
+        }  catch (OptimisticLockException ex) {
+            throw new EntityLockEx(
+                    "Курс был изменен другим пользователем. Повторите попытку",
+                    String.format("Ошибка при измении курса пользователем %s. Курс %s был " +
+                            "изменен другим пользователем", principal.getId(), courseId)
+            );
         }
     }
 
     @Transactional(rollbackFor = Exception.class)
     public CourseResponseDto save(CourseCreateWithUserIdListRequestDto request, User creator) {
         List<User> users = new ArrayList<>();
-        if(request.getUserIdList() != null && !request.getUserIdList().isEmpty()){
+        if (request.getUserIdList() != null && !request.getUserIdList().isEmpty()) {
             users = userService.findAllByIdList(request.getUserIdList());
         }
 
@@ -120,7 +126,7 @@ public class CourseService {
     @Transactional(rollbackFor = Exception.class)
     public CourseResponseDto save(CourseCreateWithGroupIdListRequestDto request, User creator) {
         List<User> users = new ArrayList<>();
-        if(request.getGroupIdList() != null && !request.getGroupIdList().isEmpty()){
+        if (request.getGroupIdList() != null && !request.getGroupIdList().isEmpty()) {
             users = userService.findAllByGroupIdList(request.getGroupIdList());
         }
 
@@ -256,7 +262,7 @@ public class CourseService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public List<UserShortResponseDto> addUsersToCourseByUserIdList(UUID courseId, List<UUID> userIdList, User tutor) {
+    public List<UserShortResponseDto> addUsersToCourseByUserIdList(User principal, UUID courseId, List<UUID> userIdList, User tutor) {
         Course course = findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Курса с указанным id не существует",
@@ -265,11 +271,11 @@ public class CourseService {
                 ));
 
         List<User> users = userService.findAllByIdList(userIdList);
-        return addUsersToCourse(course, users, tutor);
+        return addUsersToCourse(principal, course, users, tutor);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public List<UserShortResponseDto> addUsersToCourseByGroupIdList(UUID courseId, List<UUID> groupIdList, User tutor) {
+    public List<UserShortResponseDto> addUsersToCourseByGroupIdList(User principal, UUID courseId, List<UUID> groupIdList, User tutor) {
         Course course = findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         String.format("Ошибка. Курса с id %s не существует", courseId),
@@ -278,7 +284,7 @@ public class CourseService {
                 ));
 
         List<User> users = userService.findAllByGroupIdList(groupIdList);
-        return addUsersToCourse(course, users, tutor);
+        return addUsersToCourse(principal, course, users, tutor);
     }
 
     private void checkIsAnyUserAlreadyJoinedCourse(List<User> users, UUID courseId) {
@@ -294,7 +300,7 @@ public class CourseService {
         });
     }
 
-    private List<UserShortResponseDto> addUsersToCourse(Course course, List<User> users, User tutor) {
+    private List<UserShortResponseDto> addUsersToCourse(User principal, Course course, List<User> users, User tutor) {
         users.forEach(u ->
                 checkUserHasAccessToOtherOrElseThrow(tutor, u, false, true)
         );
@@ -346,6 +352,12 @@ public class CourseService {
             }
 
             throw new DBConstraintViolationEx(message, debugMessage);
+        } catch (OptimisticLockException ex) {
+            throw new EntityLockEx(
+                    "Ошибка. Курс бы изменен другим пользователем. Повторите попытку",
+                    String.format("Ошибка при добавлении пользователей в курс пользователем %s. Курс %s был " +
+                            "изменен другим пользователем", principal.getId(), course.getId())
+            );
         }
 
         users.forEach(u -> courseEmailService.sendCourseJoinNotification(u, course));
@@ -370,9 +382,9 @@ public class CourseService {
 
         try {
             courseRepository.saveAndFlush(course);
-        } catch (OptimisticLockException ex){
+        } catch (OptimisticLockException ex) {
             throw new EntityLockEx(
-                    "Список участников курса был изменен другим пользователем. Повторите попытку",
+                    "Курс был изменен другим пользователем. Повторите попытку",
                     String.format("Ошибка удаления пользователей из курса %s. OptimisticLockException", courseId)
             );
         }
@@ -428,28 +440,14 @@ public class CourseService {
                 .toList();
     }
 
-    public List<CourseResponseDto> findCoursesByUser(User principal) {
-        List<Course> courses = principal.getRole().equals(Role.ADMIN) ?
-                courseRepository.findAllByInstitutionId(principal.getInstitution().getId()) :
-                courseUserRepository.findCoursesByUserId(principal.getId());
+    public List<CourseShortResponseDto> findCoursesByUserId(User principal, UUID userId) {
+        List<Course> courses = courseUserRepository.findCoursesByUserId(userId);
 
         return courses.stream()
-                .map(c -> {
-
-                    CourseResponseDto courseResponse = DtoFactory.makeCourseResponseDto(
-                            c,
-                            courseUserRepository.findCourseCreatorByCourseId(c.getId()).orElse(null),
-                            courseUserRepository.findAllByCourseId(c.getId())
-                                    .stream()
-                                    .map(CourseUser::getUser)
-                                    .toList()
-                    );
-                    if (!principal.getRole().equals(Role.ADMIN) && !principal.getRole().equals(Role.TUTOR)) {
-                        courseResponse.setCode(null);
-                    }
-                    return courseResponse;
-
-                })
+                .map(c -> DtoFactory.makeCourseShortResponseDto(
+                                c, courseUserRepository.findCourseCreatorByCourseId(c.getId()).orElse(null)
+                        )
+                )
                 .toList();
     }
 
@@ -523,6 +521,12 @@ public class CourseService {
             }
 
             throw new DBConstraintViolationEx(message, debugMessage);
+        } catch (OptimisticLockException ex) {
+            throw new EntityLockEx(
+                    "Ошибка. Курс бы изменен другим пользователем. Повторите попытку",
+                    String.format("Ошибка при добавлении учебного материала в курс пользователем %s. Курс %s был " +
+                            "изменен другим пользователем", principal.getId(), course.getId())
+            );
         }
 
         fileService.uploadFiles(contentInfoList);
@@ -533,9 +537,9 @@ public class CourseService {
     }
 
     @Async
-    private void sendCourseMaterialUploadedNotification(UUID courseId, CourseMaterial material){
+    private void sendCourseMaterialUploadedNotification(UUID courseId, CourseMaterial material) {
         List<User> usersInCourse = courseRepository.findByIdWithCourseUsers(courseId)
-                .map( c -> c.getCourseUsers()
+                .map(c -> c.getCourseUsers()
                         .stream()
                         .map(CourseUser::getUser)
                         .toList())
@@ -556,9 +560,9 @@ public class CourseService {
         List<Content> content = courseMaterial.getContent();
         try {
             courseMaterialRepository.delete(courseMaterial);
-        } catch (OptimisticLockException ex){
+        } catch (OptimisticLockException ex) {
             throw new EntityLockEx(
-                    "Учебный материал был удален другим пользователем",
+                    "Курс был изменен другим пользователем. Повторите попытку",
                     String.format("Ошибка при удалении учебного материала пользователем %s. Учебный материал %s был " +
                             "удален другим пользователем", principal.getId(), courseMaterial.getId())
             );
@@ -588,7 +592,7 @@ public class CourseService {
         // удалить файлы
         List<UUID> toDeleteList = request.getToDeleteList();
 
-        if(toDeleteList != null && !toDeleteList.isEmpty()) {
+        if (toDeleteList != null && !toDeleteList.isEmpty()) {
             List<Content> content = courseMaterial.getContent();
             content = content.stream()
                     .filter(c -> {
@@ -603,23 +607,25 @@ public class CourseService {
             isCourseUpdated = true;
         }
 
-        if(request.getContent() != null && !request.getContent().isEmpty()) {
+        if (request.getContent() != null && !request.getContent().isEmpty()) {
             List<MultipartFile> newContent = request.getContent();
-            newContent.forEach(c ->{
-                for(Content content : courseMaterial.getContent()){
-                    if(content.getOriginalFileName().equals(c.getOriginalFilename())){
+            newContent.forEach(c -> {
+                for (Content content : courseMaterial.getContent()) {
+                    if (content.getOriginalFileName().equals(c.getOriginalFilename())) {
                         throw new FileDuplicatedEx(
                                 String.format("Файл с именем %s уже существует в этом учебном материале",
                                         c.getOriginalFilename()),
                                 String.format("Ошибка при обновлении учебного материала %s. Пользователь %s пытается " +
-                                        "загрузить файл с именем %s, который уже существует",
+                                                "загрузить файл с именем %s, который уже существует",
                                         courseMaterial.getId(), principal.getId(), c.getOriginalFilename())
                         );
                     }
                 }
             });
 
-            if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(courseMaterial.getCourse().getId(), newContent.size())) {
+            if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(
+                    courseMaterial.getCourse().getId(), newContent.size() - pathToDeleteList.size()
+                    )) {
                 throw new TaskAndCourseMaterialFileLimitForCourseExceededEx(
                         String.format("Ошибка при загрузке файлов. Превышено максимально " +
                                         "допустимое число файлов для этого курса - %s",
@@ -631,7 +637,7 @@ public class CourseService {
                         )
                 );
             } else if (courseLimitCounter.isFileAmountForCourseMaterialExceedsLimit(
-                    courseMaterial.getCourse().getId(), courseMaterial.getId(), newContent.size()
+                    courseMaterial.getCourse().getId(), courseMaterial.getId(), newContent.size() - pathToDeleteList.size()
             )) {
                 throw new CourseMaterialFileLimitExceededEx(
                         String.format("Ошибка при загрузке файлов. Превышено максимально допустимое число файлов" +
@@ -669,14 +675,14 @@ public class CourseService {
             isCourseUpdated = true;
         }
 
-        if(isCourseUpdated) {
+        if (isCourseUpdated) {
             courseMaterial.setLastChangedAt(LocalDateTime.now());
 
             try {
                 courseMaterialRepository.saveAndFlush(courseMaterial);
-            } catch (OptimisticLockException ex){
+            } catch (OptimisticLockException ex) {
                 throw new EntityLockEx(
-                        "Материал был изменен другим пользователем. Повторите попытку",
+                        "Курс был изменен другим пользователем. Повторите попытку",
                         String.format("Ошибка при обновлении учебного материала %s пользователем %s. Материал был " +
                                 "изменен другим пользователем", courseMaterial.getId(), principal.getId())
                 );
@@ -689,7 +695,7 @@ public class CourseService {
         return DtoFactory.makeCourseMaterialResponseDto(courseMaterial);
     }
 
-    public List<User> findAllUsersByCourseIdAndUserIdIn(UUID courseId, List<UUID> userIdList){
+    public List<User> findAllUsersByCourseIdAndUserIdIn(UUID courseId, List<UUID> userIdList) {
         return courseUserRepository.findAllUsersByCourseIdAndUserIdIn(courseId, userIdList);
     }
 
@@ -697,7 +703,7 @@ public class CourseService {
         return courseUserRepository.getUserCountForCourseByCourseId(courseId);
     }
 
-    public List<User> findUsersByCourseId(UUID courseId){
+    public List<User> findUsersByCourseId(UUID courseId) {
         return courseUserRepository.findAllByCourseId(courseId)
                 .stream()
                 .map(CourseUser::getUser)
@@ -718,7 +724,7 @@ public class CourseService {
                 .toList();
     }
 
-    public Resource getCourseMaterialFile(String path){
+    public Resource getCourseMaterialFile(String path) {
         Path absPath = Paths.get(basePath).resolve(path);
 
         try {
@@ -728,7 +734,7 @@ public class CourseService {
             }
 
             return resource;
-        } catch (MalformedURLException ex){
+        } catch (MalformedURLException ex) {
             throw new IllegalArgumentException("Ошибка на сервере");
         }
     }

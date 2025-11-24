@@ -5,6 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
+import ru.antonov.oauth2_social.user.dto.DtoFactory;
+import ru.antonov.oauth2_social.user.dto.GroupResponseDto;
 import ru.antonov.oauth2_social.user.entity.Group;
 import ru.antonov.oauth2_social.user.repository.GroupRepository;
 import ru.antonov.oauth2_social.exception.DBConstraintViolationEx;
@@ -41,6 +44,16 @@ public class GroupService {
 
             throw new DBConstraintViolationEx(message, debugMessage);
         }
+    }
+
+    public GroupResponseDto findGroupById(UUID groupId){
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Группы с указанным id не существует",
+                        String.format("Неудача при поиске группы. Группа с %s id не существует", groupId)
+                ));
+
+        return DtoFactory.makeGroupResponseDto(group);
     }
 
     public Group save(Group group){

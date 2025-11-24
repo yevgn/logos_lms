@@ -72,6 +72,10 @@ public class Task {
     )
     private Set<Solution> solutions = new HashSet<>();
 
+    @Column(name = "task_comments", columnDefinition = "varchar")
+    @Convert(converter = TaskCommentsJsonConverter.class)
+    private List<TaskComment> comments = new ArrayList<>();
+
     @Column(name = "is_assessed")
     private boolean isAssessed = true;
 
@@ -82,6 +86,11 @@ public class Task {
     public void addContent(Content content){
         this.content.add(content);
     }
+
+    public void addComments(List<TaskComment> comments){
+        this.comments.addAll(comments);
+    }
+
 
     @PrePersist
     private void checkToSubmitAt(){
@@ -132,5 +141,29 @@ public class Task {
                 ", content=" + content +
                 ", isAssessed=" + isAssessed +
                 '}';
+    }
+
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Getter
+    @Setter
+    public static class TaskComment{
+        private UUID id;
+        private UUID userId;
+        private String text;
+        private LocalDateTime publishedAt;
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            TaskComment that = (TaskComment) o;
+            return Objects.equals(id, that.id);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(id);
+        }
     }
 }

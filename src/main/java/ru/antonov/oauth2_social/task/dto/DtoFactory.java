@@ -1,5 +1,7 @@
 package ru.antonov.oauth2_social.task.dto;
 
+import ru.antonov.oauth2_social.solution.dto.SolutionCommentResponseDto;
+import ru.antonov.oauth2_social.solution.entity.Solution;
 import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.user.entity.User;
 
@@ -52,6 +54,18 @@ public class DtoFactory {
                                 null
                 )
                 .isForEveryone(task.isForEveryone())
+                .build();
+    }
+
+    public static TaskCommentResponseDto makeTaskCommentResponseDto(
+            Task.TaskComment comment, User author
+    ){
+        return TaskCommentResponseDto
+                .builder()
+                .id(comment.getId())
+                .text(comment.getText())
+                .publishedAt(comment.getPublishedAt())
+                .author(author == null ? null : ru.antonov.oauth2_social.user.dto.DtoFactory.makeUserShortResponseDto(author))
                 .build();
     }
 }

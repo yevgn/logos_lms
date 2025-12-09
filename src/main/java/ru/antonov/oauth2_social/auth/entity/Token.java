@@ -15,7 +15,8 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "tokens")
+@Table(name = "tokens",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"token"}))
 public class Token {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

@@ -18,7 +18,7 @@ import ru.antonov.oauth2_social.auth.dto.*;
 import ru.antonov.oauth2_social.auth.entity.TokenMode;
 import ru.antonov.oauth2_social.auth.entity.TokenType;
 import ru.antonov.oauth2_social.auth.exception.*;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
+import ru.antonov.oauth2_social.common.exception.EntityNotFoundEx;
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.auth.exception.AccountActivationTokenRenewEx;
 import ru.antonov.oauth2_social.user.service.UserService;
@@ -84,7 +84,7 @@ public class AuthService {
         if (tfaAuthService.isOtpNotValid(user.getTfaSecret(), request.getCode())) {
             throw new BadTfaCodeEx(
                     "Неправильный код",
-                    String.format("Ошибка верификации кода 2FA. Неправильный код 2FA пользователя %s", user.getEmail())
+                    String.format("Ошибка верификации кода 2FA. Неправильный код 2FA пользователя %s", user.getId())
             );
         }
 
@@ -117,7 +117,7 @@ public class AuthService {
 
         User user = tokenService.findUserByToken(refreshToken)
                 .orElseThrow(() -> new EntityNotFoundEx(
-                        "Пользователь не найден",
+                        "Ошибка. Владелец токена не найден",
                         String.format("Ошибка при обновлении токена доступа. " +
                                 "Пользователь по токену %s не найден", refreshToken
                         )
@@ -133,6 +133,7 @@ public class AuthService {
                 .builder()
                 .userId(user.getId())
                 .accessToken(newAccessToken)
+                .refreshToken("")
                 .isTfaEnabled(user.isTfaEnabled())
                 .build();
     }
@@ -167,28 +168,28 @@ public class AuthService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public AuthResponseDto resetPassword(ResetPasswordRequestDto request) {
+    public void resetPassword(ResetPasswordRequestDto request) {
         String email = request.getEmail();
         String token = request.getResetPasswordToken();
 
         User user = userService.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundEx(
-                        "Пользователь не найден",
+                        "Ошибка. Пользователь не найден",
                         String.format("Ошибка сброса пароля. Пользователь с %s email не найден", email)
                 ));
 
         User tokenUser = tokenService.findUserByToken(token)
                 .orElseThrow(() -> new EntityNotFoundEx(
-                        "Пользователь не найден",
+                        "Ошибка. Пользователь не найден",
                         String.format("Ошибка сброса пароля. Пользователь по токену %s не найден", token)
                 ));
 
-        if (!tokenUser.equals(user)) {
+        if (!tokenUser.getId().equals(user.getId())) {
             throw new TokenUserMismatchEx(
                     "Данный токен принадлежит другому пользователю.",
                     String.format("Ошибка сброса пароля. Несовпадение: токен принадлежит пользователю %s." +
                                     " Заявленный пользователь: %s",
-                            tokenUser.getEmail(), email
+                            tokenUser.getId(), user.getId()
                     )
             );
         }
@@ -198,7 +199,7 @@ public class AuthService {
             throw new ResetPasswordTokenRenewEx(
                     "Время действия ссылки истекло. Вы получите новую ссылку на ваш email",
                     String.format("Неуспешный сброс пароля. reset_password_token пользователя %s истек. " +
-                            "Произошла выдача нового токена", email)
+                            "Произошла выдача нового токена", user.getId())
             );
         }
 
@@ -208,7 +209,8 @@ public class AuthService {
                     "Слишком слабый пароль. Пароль должен содержать от 8 до 64 символов, содержать хотя бы одну" +
                             " прописную английскую букву, одну строчную английскую букву, одну цифру и один специальный" +
                             " символ.",
-                    String.format("Ошибка сброса пароля. Новый пароль %s пользователя %s не прошел валидацию", newPassword, email)
+                    String.format("Ошибка сброса пароля. Новый пароль %s пользователя %s не прошел валидацию",
+                            newPassword, user.getId())
             );
         }
 
@@ -220,21 +222,7 @@ public class AuthService {
                 List.of(TokenMode.RESET_PASSWORD, TokenMode.ACCESS, TokenMode.REFRESH)
         );
 
-        var accessToken = jwtService.generateUserToken(List.of(user.getRole().name()), user.getEmail(), TokenMode.ACCESS);
-        var refreshToken = jwtService.generateUserToken(List.of(user.getRole().name()), user.getEmail(), TokenMode.REFRESH);
-
-        tokenService.saveToken(accessToken, TokenType.BEARER, TokenMode.ACCESS, user);
-        tokenService.saveToken(refreshToken, TokenType.BEARER, TokenMode.REFRESH, user);
-
         authEmailService.sendPasswordSuccessfulResetNotification(user);
-
-        return AuthResponseDto
-                .builder()
-                .userId(user.getId())
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .isTfaEnabled(user.isTfaEnabled())
-                .build();
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -245,14 +233,14 @@ public class AuthService {
 
         var user = userService.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundEx(
-                        "Пользователь с таким email не найден",
+                        "Ошибка. Пользователь с таким email не найден",
                         String.format("Ошибка сброса 2FA secret. Пользователь с email %s не найден", email))
                 );
 
         if(!user.isTfaEnabled()){
             throw new TfaNotEnabledEx(
                     "На этом аккаунте не включена двухфакторная аутентификация",
-                    String.format("Ошибка сброса 2FA secret. У пользователя %s не включена 2FA", email)
+                    String.format("Ошибка сброса 2FA secret. У пользователя %s не включена 2FA", user.getId())
             );
         }
 
@@ -297,7 +285,7 @@ public class AuthService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public AuthResponseDto resetTfa(String email, String token) {
+    public void resetTfa(String email, String token) {
         User user = userService.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Пользователь с таким email не найден",
@@ -315,7 +303,7 @@ public class AuthService {
                     "Токен принадлежит другому пользователю",
                     String.format("Ошибка сброса 2FA secret. Несовпадение: токен принадлежит пользователю %s. " +
                                     "Заявленный пользователь: %s",
-                            tokenUser.getEmail(), email
+                            tokenUser.getId(), user.getId()
                     )
             );
         }
@@ -329,11 +317,9 @@ public class AuthService {
             );
         }
 
-        user.setTfaSecret(tfaAuthService.generateNewSecret());
+        user.setTfaSecret(null);
+        user.setTfaEnabled(false);
         userService.save(user);
-
-        var accessToken = jwtService.generateUserToken(List.of(user.getRole().name()), user.getEmail(), TokenMode.ACCESS);
-        var refreshToken = jwtService.generateUserToken(List.of(user.getRole().name()), user.getEmail(), TokenMode.REFRESH);
 
         tokenService.revokeUserTokensByTokenModeIn(
                 user.getEmail(),
@@ -341,29 +327,23 @@ public class AuthService {
         );
 
         authEmailService.sendTfaSuccessfulResetNotification(user);
-
-        return AuthResponseDto.builder()
-                .userId(user.getId())
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .isTfaEnabled(user.isTfaEnabled())
-                .secretImageUri(tfaAuthService.generateQrCodeImageUri(user.getTfaSecret(), user.getEmail()))
-                .build();
     }
 
     @Transactional(rollbackFor = Exception.class)
     public AuthResponseDto enable2fa(User user, AuthRequestDto request) {
+        tryAuth(request.getEmail(), request.getPassword());
+
         if(!isCorrectCredentials(user, request.getEmail(), request.getPassword())){
             throw new AuthenticationEx(
                     "Введены неправильные данные",
-                    String.format("Неуспешная аутентификация. Неуспешная аутентификация пользователя %s", user.getEmail())
+                    String.format("Неуспешная аутентификация. Неуспешная аутентификация пользователя %s", user.getId())
             );
         }
 
         if (user.isTfaEnabled()) {
             throw new TfaAlreadyEnabledEx(
                     "На этом аккаунте уже включена двухфакторная аутентификация",
-                    String.format("Ошибка подключения 2FA. 2FA для пользователя %s уже включена", user.getEmail())
+                    String.format("Ошибка подключения 2FA. 2FA для пользователя %s уже включена", user.getId())
             );
         }
 
@@ -390,20 +370,24 @@ public class AuthService {
                 .build();
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public AuthResponseDto disableTfa(User user, AuthRequestDto request, String tfaCode) {
         String email = request.getEmail();
         String password = request.getPassword();
+
+        tryAuth(email, password);
+
         if(!isCorrectCredentials(user, email, password)){
             throw new AuthenticationEx(
                     "Введены неправильные данные",
-                    String.format("Неуспешная аутентификация. Неуспешная аутентификация пользователя %s", user.getEmail())
+                    String.format("Неуспешная аутентификация. Неуспешная аутентификация пользователя %s", user.getId())
             );
         }
 
         if(tfaAuthService.isOtpNotValid(user.getTfaSecret(), tfaCode)){
             throw new BadTfaCodeEx(
                     "Неправильный код",
-                    String.format("Ошибка отключения 2FA. Неправильный код 2FA пользователя %s", user.getEmail())
+                    String.format("Ошибка отключения 2FA. Неправильный код 2FA пользователя %s", user.getId())
             );
         }
 
@@ -429,6 +413,7 @@ public class AuthService {
                 .build();
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void activateAccount(String accountActivationToken, String userEmail){
         User user = userService.findByEmail(userEmail)
                 .orElseThrow(() -> new EntityNotFoundEx(
@@ -439,7 +424,7 @@ public class AuthService {
         if(user.isEnabled()){
             throw new AccountAlreadyEnabledEx(
                     "Ваш аккаунт уже активирован!",
-                    String.format("Ошибка при активации аккаунта. Аккаунт пользователя %s уже активирован!", userEmail)
+                    String.format("Ошибка при активации аккаунта. Аккаунт пользователя %s уже активирован!", user.getId())
             );
         }
 
@@ -454,7 +439,7 @@ public class AuthService {
                     "Данный токен принадлежит другому пользователю.",
                     String.format("Ошибка активации аккаунта. Несовпадение: токен принадлежит пользователю %s." +
                                     " Заявленный пользователь: %s",
-                            tokenUser.getEmail(), userEmail
+                            tokenUser.getId(), user.getId()
                     )
             );
         }
@@ -465,11 +450,11 @@ public class AuthService {
                     List.of(user.getRole().name()), userEmail, TokenMode.ACCOUNT_ACTIVATION
             );
             tokenService.saveToken(newToken, TokenType.BEARER, TokenMode.ACCOUNT_ACTIVATION, user);
-            authEmailService.sendMailForAccountActivation(user, newToken );
+            authEmailService.sendMailForAccountActivation(user, newToken);
             throw new AccountActivationTokenRenewEx(
                     "Время действия ссылки истекло. Вы получите новую ссылку на ваш email",
                     String.format("Неуспешная активация аккаунта. account_activation_token пользователя %s истек. " +
-                            "Произошла выдача нового токена", userEmail)
+                            "Произошла выдача нового токена", user.getId())
             );
         }
 

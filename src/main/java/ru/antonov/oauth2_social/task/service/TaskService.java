@@ -1,29 +1,25 @@
 package ru.antonov.oauth2_social.task.service;
 
 import jakarta.persistence.OptimisticLockException;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.NestedExceptionUtils;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import ru.antonov.oauth2_social.common.Content;
+import ru.antonov.oauth2_social.common.exception.*;
 import ru.antonov.oauth2_social.course.entity.*;
 import ru.antonov.oauth2_social.course.exception.*;
 import ru.antonov.oauth2_social.course.service.CourseLimitCounter;
 import ru.antonov.oauth2_social.course.service.CourseService;
 import ru.antonov.oauth2_social.common.FileService;
-import ru.antonov.oauth2_social.solution.dto.SolutionCommentCreateRequestDto;
-import ru.antonov.oauth2_social.solution.entity.Solution;
-import ru.antonov.oauth2_social.solution.exception.SolutionCommentAmountLimitExceededEx;
 import ru.antonov.oauth2_social.task.dto.*;
 import ru.antonov.oauth2_social.task.repository.TaskRepository;
-import ru.antonov.oauth2_social.exception.*;
 import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.task.entity.TaskUser;
 import ru.antonov.oauth2_social.task.entity.TaskUserKey;
@@ -58,8 +54,7 @@ public class TaskService {
     private int maxTaskAndMaterialFileAmountForCourse;
     @Value("${spring.application.course-limit-params.max-file-amount-for-task}")
     private int maxFileAmountForTask;
-    @Value("${spring.application.course-limit-params.max-comment-amount-for-task}")
-    private int maxCommentAmountForTask;
+
     @Value("${spring.application.file-storage.base-path}")
     private String basePath;
 
@@ -72,7 +67,7 @@ public class TaskService {
                                 "Курса с id %s не существует", principal.getId(), courseId)
                 ));
 
-        List<MultipartFile> files = request.getContent();
+        List<MultipartFile> files = request.getContent() == null ? List.of() : request.getContent();
 
         if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(course.getId(), files.size())) {
             throw new TaskAndCourseMaterialFileLimitForCourseExceededEx(
@@ -121,25 +116,10 @@ public class TaskService {
 
         List<User> targetUsers = List.of();
 
-        try {
-            taskRepository.saveAndFlush(task);
-        } catch (DataIntegrityViolationException ex) {
-            Throwable root = NestedExceptionUtils.getRootCause(ex);
-            String message;
-            String debugMessage;
-
-            if (root instanceof SQLException sqlEx && sqlEx.getMessage().toLowerCase().contains("unique") &&
-                    sqlEx.getMessage().toLowerCase().contains("title_course_id")) {
-                message = "Ошибка. В данном курсе уже существует задание с таким названием";
-                debugMessage = String.format("Ошибка при добавлении задания. " +
-                        "В курсе %s уже существует задание с названием %s", course.getId(), request.getTitle());
-            } else {
-                message = "Нарушены ограничения целостности данных. Возможно, вы пытаетесь добавить некорректные или уже существующие данные";
-                debugMessage = (root != null ? root.getMessage() : ex.getMessage());
-            }
-
-            throw new DBConstraintViolationEx(message, debugMessage);
-        }
+        Path taskCataloguePath = Paths.get(basePath, course.getId().toString(), "tasks", task.getId().toString());
+        fileService.createDirectory(taskCataloguePath);
+        Path solutionsCataloguePath = taskCataloguePath.resolve("solutions");
+        fileService.createDirectory(solutionsCataloguePath);
 
         if (!request.isForEveryone()) {
             List<User> targetUsersInCourse = courseService
@@ -160,15 +140,32 @@ public class TaskService {
                     ).collect(Collectors.toSet());
 
             task.setTaskUsers(taskTargetUsers);
-            taskRepository.saveAndFlush(task);
-
             targetUsers = taskTargetUsers.stream().map(TaskUser::getUser).toList();
         } else {
-            targetUsers = task.getCourse().getCourseUsers()
+            targetUsers = courseService.findUsersByCourseId(courseId)
                     .stream()
-                    .map(CourseUser::getUser)
                     .filter(u -> u.getRole().equals(Role.STUDENT))
                     .toList();
+        }
+
+        try {
+            taskRepository.saveAndFlush(task);
+        } catch (DataIntegrityViolationException ex) {
+            Throwable root = NestedExceptionUtils.getRootCause(ex);
+            String message;
+            String debugMessage;
+
+            if (root instanceof SQLException sqlEx && sqlEx.getMessage().toLowerCase().contains("unique") &&
+                    sqlEx.getMessage().toLowerCase().contains("title_course_id")) {
+                message = "Ошибка. В данном курсе уже существует задание с таким названием";
+                debugMessage = String.format("Ошибка при добавлении задания. " +
+                        "В курсе %s уже существует задание с названием %s", course.getId(), request.getTitle());
+            } else {
+                message = "Нарушены ограничения целостности данных. Возможно, вы пытаетесь добавить некорректные или уже существующие данные";
+                debugMessage = (root != null ? root.getMessage() : ex.getMessage());
+            }
+
+            throw new DBConstraintViolationEx(message, debugMessage);
         }
 
         fileService.uploadFiles(contentInfoList);
@@ -246,31 +243,6 @@ public class TaskService {
                 }
             });
 
-            if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(
-                    task.getCourse().getId(), newContent.size() - pathToDeleteList.size()
-            )) {
-                throw new TaskAndCourseMaterialFileLimitForCourseExceededEx(
-                        String.format("Ошибка при загрузке файлов. Превышено максимально " +
-                                        "допустимое число файлов для этого курса - %s",
-                                maxTaskAndMaterialFileAmountForCourse
-                        ),
-                        String.format("Ошибка при загрузке файлов. " +
-                                        "Превышено максимально допустимое количество учебных файлов для курса с %s id",
-                                task.getCourse().getId()
-                        )
-                );
-            } else if (courseLimitCounter.isFileAmountForTaskExceedsLimit(
-                    task.getCourse().getId(), task.getId(), newContent.size() - pathToDeleteList.size()
-            )) {
-                throw new TaskFileLimitExceededEx(
-                        String.format("Ошибка при загрузке файлов. Превышено максимально допустимое число файлов" +
-                                " в рамках одного задания - %d", maxFileAmountForTask),
-                        String.format("Ошибка при загрузке файлов пользователем %s в задание %s. " +
-                                        "Превышено максимально допустимое число файлов в рамках одного задания",
-                                principal.getId(), task.getId())
-                );
-            }
-
             List<FileService.FileInfo> contentInfoList = newContent.stream()
                     .map(f -> {
                         UUID fileId = UUID.randomUUID();
@@ -328,12 +300,50 @@ public class TaskService {
             }
 
             pathToDeleteList.forEach(fileService::deleteFile);
-            fileService.uploadFiles(filesToWriteList);
+
+
+            if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(
+                    task.getCourse().getId(), filesToWriteList.size())
+            ) {
+                throw new TaskAndCourseMaterialFileLimitForCourseExceededEx(
+                        String.format("Ошибка при загрузке файлов. Превышено максимально " +
+                                        "допустимое число файлов для этого курса - %s",
+                                maxTaskAndMaterialFileAmountForCourse
+                        ),
+                        String.format("Ошибка при загрузке файлов. " +
+                                        "Превышено максимально допустимое количество учебных файлов для курса с %s id",
+                                task.getCourse().getId()
+                        )
+                );
+            } else if (courseLimitCounter.isFileAmountForTaskExceedsLimit(
+                    task.getCourse().getId(), task.getId(), filesToWriteList.size()
+            )) {
+                throw new TaskFileLimitExceededEx(
+                        String.format("Ошибка при загрузке файлов. Превышено максимально допустимое число файлов" +
+                                " в рамках одного задания - %d", maxFileAmountForTask),
+                        String.format("Ошибка при загрузке файлов пользователем %s в задание %s. " +
+                                        "Превышено максимально допустимое число файлов в рамках одного задания",
+                                principal.getId(), task.getId())
+                );
+            }
+
+            try {
+                fileService.uploadFiles(filesToWriteList);
+            } catch (IllegalArgumentException ex){
+                throw new EmptyFileEx(
+                        "Ошибка. Вы пытаетесь загрузить пустой файл",
+                        String.format("Ошибка при обновлении задания %s. Пользователь %s пытается " +
+                                "загрузить пустой файл", task.getId(), principal.getId())
+                );
+            }
         }
 
         List<User> targetUsers = new ArrayList<>();
         if (task.isForEveryone()) {
-            targetUsers = userService.findAllByCourseId(task.getCourse().getId());
+            targetUsers = courseService.findUsersByCourseId(task.getCourse().getId())
+                    .stream()
+                    .filter(u -> u.getRole() == Role.STUDENT)
+                    .toList();
         } else {
             targetUsers = task.getTaskUsers()
                     .stream()
@@ -356,9 +366,14 @@ public class TaskService {
             );
         }
 
-        String pathStr = content.get(0).getPath();
-        Path filePath = Paths.get(pathStr);
-        Path dirPath = filePath.getParent();
+        Path dirPath;
+        if (!content.isEmpty()) {
+            String pathStr = content.get(0).getPath();
+            Path filePath = Paths.get(pathStr);
+            dirPath = filePath.getParent();
+        } else {
+            dirPath = fileService.generateTaskCataloguePath(task.getCourse().getId(), task.getId());
+        }
 
         fileService.deleteDirectory(dirPath);
     }
@@ -402,7 +417,7 @@ public class TaskService {
                         )
                 ));
 
-        if (!courseService.isUserJoinedCourse(courseId, userId)) {
+        if (!courseService.isUserJoinedCourse(userId, courseId)) {
             throw new UserNotInCourseEx(
                     "Данный пользователь не состоит в указанном курсе",
                     String.format("Ошибка при поиске заданий пользователем %s. " +
@@ -433,15 +448,15 @@ public class TaskService {
                 .toList();
     }
 
-    public List<Task> findAllCommonTasksByCourseId(UUID courseId){
+    public List<Task> findAllCommonTasksByCourseId(UUID courseId) {
         return taskRepository.findAllCommonTasksByCourseId(courseId);
     }
 
-    public List<Task> findAllTargetTasksByCourseIdAndUserId(UUID courseId, UUID userId){
+    public List<Task> findAllTargetTasksByCourseIdAndUserId(UUID courseId, UUID userId) {
         return taskRepository.findAllTargetTasksByCourseIdAndUserId(courseId, userId);
     }
 
-    public List<Task> findAllTargetTasksByCourseId(UUID courseId){
+    public List<Task> findAllTargetTasksByCourseId(UUID courseId) {
         return taskRepository.findAllTargetTasksByCourseId(courseId);
     }
 
@@ -453,19 +468,13 @@ public class TaskService {
                 .toList();
     }
 
-    public Resource getTaskFile(String path){
+    public Resource getTaskFile(String path) throws MalformedURLException {
         Path absPath = Paths.get(basePath).resolve(path);
-
-        try {
-            Resource resource = new UrlResource(absPath.toUri());
-            if (!resource.exists() || !resource.isReadable()) {
-                throw new IllegalArgumentException("Файл не найден");
-            }
-
-            return resource;
-        } catch (MalformedURLException ex){
-            throw new IllegalArgumentException("Ошибка на сервере");
+        Resource resource = new FileSystemResource(absPath);
+        if (!resource.exists() || !resource.isReadable()) {
+            throw new IllegalArgumentException("Файл не найден");
         }
+        return resource;
     }
 
     public String resolveContentType(String fileName) {
@@ -476,87 +485,8 @@ public class TaskService {
         return contentType;
     }
 
-    public Optional<Task> findByIdWithSolutions(UUID taskId){
+    public Optional<Task> findByIdWithSolutions(UUID taskId) {
         return taskRepository.findByIdWithSolutions(taskId);
     }
 
-    public void saveComment(User principal, UUID taskId, TaskCommentCreateRequestDto request) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Ошибка. Такого задания не существует",
-                        String.format("Ошибка при загрузке комментария к заданию пользователем %s. " +
-                                "Задания %s не существует", principal.getEmail(), taskId)
-                ));
-
-        if (courseLimitCounter.isCommentAmountForTaskExceedsLimit(taskId, 1)) {
-            throw new SolutionCommentAmountLimitExceededEx(
-                    String.format("Ошибка. Превышено максимальное число комментариев для задания - %s",
-                            maxCommentAmountForTask),
-                    String.format("Ошибка добавления комментария к заданию %s пользователем %s. Превышен лимит",
-                            taskId, principal.getId())
-            );
-        }
-
-        Task.TaskComment comment = Task.TaskComment.builder()
-                .id(UUID.randomUUID())
-                .userId(principal.getId())
-                .text(request.getText())
-                .publishedAt(LocalDateTime.now())
-                .build();
-
-        task.addComments(List.of(comment));
-
-        try {
-            taskRepository.save(task);
-        } catch (OptimisticLockException ex) {
-            throw new EntityLockEx(
-                    "Ошибка. Задание было изменено. Повторите попытку",
-                    String.format("Ошибка при добавлении комментария к заданию %s пользователем %s. Задание было " +
-                            "изменено другим пользователем", task.getId(), principal.getId())
-            );
-        }
-    }
-
-    public List<TaskCommentResponseDto> findCommentsByTaskId(User principal, UUID taskId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Ошибка. Такого задания не существует",
-                        String.format("Ошибка при поиске комментариев к заданию пользователем %s. " +
-                                "Задания %s не существует", principal.getEmail(), taskId)
-                ));
-
-        return task.getComments().stream().map(c -> {
-                    User author = userService.findById(c.getUserId()).orElse(null);
-                    return DtoFactory.makeTaskCommentResponseDto(c, author);
-                })
-                .toList();
-    }
-
-    public void deleteComment(User principal, UUID taskId, UUID commentId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Ошибка. Такого задания не существует",
-                        String.format("Ошибка при удалении комментария к заданию пользователем %s. " +
-                                "Задания %s не существует", principal.getEmail(), taskId)
-                ));
-
-        List<Task.TaskComment> comments = task.getComments();
-
-        task.setComments(
-                comments.
-                        stream()
-                        .filter(s -> !s.getId().equals(commentId))
-                        .toList()
-        );
-
-        try {
-            taskRepository.save(task);
-        } catch (OptimisticLockException ex) {
-            throw new EntityLockEx(
-                    "Ошибка. Задание было изменено. Повторите попытку",
-                    String.format("Ошибка при удалении комментария к заданию %s пользователем %s. Решение было " +
-                            "изменено другим пользователем", task.getId(), principal.getId())
-            );
-        }
-    }
 }

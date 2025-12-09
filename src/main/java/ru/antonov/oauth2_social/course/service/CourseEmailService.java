@@ -13,10 +13,9 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import ru.antonov.oauth2_social.course.entity.Course;
 import ru.antonov.oauth2_social.course.entity.CourseMaterial;
-import ru.antonov.oauth2_social.solution.entity.Solution;
-import ru.antonov.oauth2_social.exception.MailAuthenticationEx;
-import ru.antonov.oauth2_social.exception.MailSendEx;
-import ru.antonov.oauth2_social.exception.MessagingEx;
+import ru.antonov.oauth2_social.common.exception.MailAuthenticationEx;
+import ru.antonov.oauth2_social.common.exception.MailSendEx;
+import ru.antonov.oauth2_social.common.exception.MessagingEx;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.util.Arrays;
@@ -41,7 +40,7 @@ public class CourseEmailService {
         String subject = "Вас записали на курс";
 
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
-                        "<p>Вы были добавлены на курс %s в Logos LMS." +
+                        "<p>Вы были записаны на курс %s в Logos LMS." +
                         "<p><a href=\"%s\">Перейти к курсу</a></p>",
                 user.getSurname(), user.getName(),
                 user.getPatronymic() == null ? "" : user.getPatronymic(),
@@ -51,6 +50,7 @@ public class CourseEmailService {
         sendEmail(subject, htmlText, new String[]{user.getEmail()});
     }
 
+    @Async
     public void sendCourseMaterialUploadedNotification(User user, CourseMaterial material){
         String subject = "Появились новые учебные материалы!";
 

@@ -1,17 +1,19 @@
-package ru.antonov.oauth2_social.exception;
+package ru.antonov.oauth2_social.common.exception;
 
 import lombok.extern.slf4j.Slf4j;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import org.springframework.http.converter.HttpMessageNotReadableException;
 
-
 import org.springframework.validation.BindingResult;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingPathVariableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 
@@ -37,7 +39,7 @@ public class ExceptionHandler {
 
     @org.springframework.web.bind.annotation.ExceptionHandler(
             {MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class,
-            HttpMessageNotReadableException.class, NoResourceFoundException.class}
+            HttpMessageNotReadableException.class, NoResourceFoundException.class, HttpRequestMethodNotSupportedException.class}
     )
     public ResponseEntity<ApiError> handle4xxExceptions(Exception ex) {
         log.warn(ex.getMessage());
@@ -49,6 +51,16 @@ public class ExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    @org.springframework.web.bind.annotation.ExceptionHandler(MissingPathVariableException.class)
+    public ResponseEntity<ApiError> handleMissingPathVariableEx(MissingPathVariableException ex) {
+        log.warn(ex.getMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
 
     @org.springframework.web.bind.annotation.ExceptionHandler(TaskAndCourseMaterialFileLimitForCourseExceededEx.class)
     public ResponseEntity<ApiError> handleTaskAndMaterialFileLimitExceededEx(TaskAndCourseMaterialFileLimitForCourseExceededEx ex) {
@@ -194,17 +206,17 @@ public class ExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
     }
 
-//    @ExceptionHandler(ConstraintViolationException.class)
-//    public ResponseEntity<ApiError> handleConstraintViolationEx(ConstraintViolationException ex){
-//        log.warn("Ошибка при добавлении записи в БД:\n" + ex.getSQLException().getMessage());
-//        ApiError apiError = ApiError
-//                .builder()
-//                .status(HttpStatus.CONFLICT)
-//                .error("Нарушены ограничения целостности базы данных. Возможно, вы пытаетесь добавить некорректные данные," +
-//                        " либо они уже существуют")
-//                .build();
-//        return ResponseEntity.status(HttpStatus.CONFLICT).body(apiError);
-//    }
+    @org.springframework.web.bind.annotation.ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolationEx(ConstraintViolationException ex){
+        log.warn("Ошибка при добавлении записи в БД:\n{}", ex.getSQLException().getMessage());
+        ApiError apiError = ApiError
+                .builder()
+                .status(HttpStatus.CONFLICT)
+                .message("Нарушены ограничения целостности базы данных. Возможно, вы пытаетесь добавить некорректные данные," +
+                        " либо они уже существуют/удалить данные некорректным образом")
+                .build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(apiError);
+    }
 
     @org.springframework.web.bind.annotation.ExceptionHandler(DBConstraintViolationEx.class)
     public ResponseEntity<ApiError> handleConstraintViolationEx(DBConstraintViolationEx ex){
@@ -239,7 +251,27 @@ public class ExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    @org.springframework.web.bind.annotation.ExceptionHandler(MalformedFileUrlEx.class)
+    public ResponseEntity<ApiError> handleMalformedFileUrlEx(MalformedFileUrlEx ex){
+        log.error(ex.getMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .message("Ошибка на сервере")
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 
+    @org.springframework.web.bind.annotation.ExceptionHandler(IllegalArgumentEx500.class)
+    public ResponseEntity<ApiError> handleIllegalArgumentEx(IllegalArgumentEx500 ex){
+        log.error(ex.getMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .message("Ошибка на сервере")
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 
 //    @ExceptionHandler(MailAuthenticationException.class)
 //    public ResponseEntity<ApiError> handleMailAuthenticationEx(MailAuthenticationException ex){
@@ -363,9 +395,25 @@ public class ExceptionHandler {
         return ResponseEntity.badRequest().body(error);
     }
 
+    @org.springframework.web.bind.annotation.ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolationEx(jakarta.validation.ConstraintViolationException ex) {
+        log.warn("Неуспешная валидация: ", ex);
+        List<String> errors = ex.getConstraintViolations()
+                .stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .toList();
+
+        ApiError error = ApiError.builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(errors.toString())
+                .build();
+
+        return ResponseEntity.badRequest().body(error);
+    }
+
     @org.springframework.web.bind.annotation.ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiError> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
-        log.warn("Ошибка загрузки файлов. Превышены параметры maxFileSize, maxRequestSize\n" + ex.getMessage());
+        log.warn("Ошибка загрузки файлов. Превышены параметры maxFileSize, maxRequestSize\n{}", ex.getMessage());
         ApiError error = ApiError
                 .builder()
                 .status(HttpStatus.BAD_REQUEST)

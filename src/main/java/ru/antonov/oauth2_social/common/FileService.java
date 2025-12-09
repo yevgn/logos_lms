@@ -4,11 +4,13 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import ru.antonov.oauth2_social.course.service.CourseLimitCounter;
-import ru.antonov.oauth2_social.exception.IOEx;
+import ru.antonov.oauth2_social.common.exception.IOEx;
+import ru.antonov.oauth2_social.common.exception.IllegalArgumentEx500;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -20,6 +22,7 @@ import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FileService {
     private final CourseLimitCounter courseLimitCounter;
     @Value("${spring.application.file-storage.base-path}")
@@ -39,21 +42,42 @@ public class FileService {
                             "Ошибка при записи файлов на диск"
                     );
                 }
+            } else{
+                throw new IllegalArgumentException("Ошибка сохранения файла на диск. Пустой файл");
             }
         }
     }
 
     public String getFileExtension(String filename) {
         if (filename == null) {
-            throw new IllegalArgumentException("Ошибка получения расширения файла. filename = null");
+            throw new IllegalArgumentEx500(
+                    "Ошибка на сервере",
+                    "Ошибка получения расширения файла. filename  = null"
+            );
         }
 
         int dotIndex = filename.lastIndexOf('.');
         if (dotIndex == -1) {
-            throw new IllegalArgumentException("Ошибка получения расширения файла. filename не содержит расширение");
+            return "";
+//            throw new IllegalArgumentEx500(
+//                    "Ошибка на сервере",
+//                    String.format("Ошибка получения расширения файла. filename %s не содержит расширение", filename));
         }
-
         return filename.substring(dotIndex + 1);
+    }
+
+    public void createDirectory(Path path){
+        if( !Files.exists(path) || (Files.exists(path) && !Files.isDirectory(path)) ) {
+            try {
+                Files.createDirectories(path);
+                log.info("Создан каталог {}", path);
+            } catch (IOException e) {
+                throw new IllegalArgumentEx500(
+                        "Ошибка на сервере",
+                        String.format("Ошибка при создании каталога %s\n%s", path, e.getMessage())
+                );
+            }
+        }
     }
 
     public void deleteDirectory(Path dirPath) {
@@ -79,8 +103,12 @@ public class FileService {
                 );
             }
         } else {
-            throw new IllegalArgumentException("Ошибка при удалении директории. Директории не существует, либо это" +
-                    " не является директорией");
+            throw new IllegalArgumentEx500(
+                    "Ошибка на сервере",
+                    String.format(
+                            "Ошибка при удалении директории %s. Директории не существует, либо это" +
+                    " не является директорией", dirPath)
+            );
         }
     }
 
@@ -96,19 +124,16 @@ public class FileService {
                 );
             }
         } else {
-            throw new IllegalArgumentException("Ошибка при удалении файла");
+            throw new IllegalArgumentEx500(
+                    "Ошибка на сервере",
+                    String.format("Ошибка при удалении файла %s. Файла не существует или это директория", filePath)
+            );
         }
-    }
-
-    private boolean isFileAlreadyExist(FileInfo fileInfo) {
-        // todo СДЕЛАТЬ
-        return false;
     }
 
     // относительный путь
     public Path generateCourseMaterialContentFilePath(UUID courseId, UUID courseMaterialId, UUID fileId, String extension) {
         return Path.of(
-                "courses",
                 courseId.toString(),
                 "course_materials",
                 courseMaterialId.toString(),
@@ -118,7 +143,6 @@ public class FileService {
 
     public Path generateTaskFilePath(UUID courseId, UUID taskId, UUID fileId, String extension) {
         return Path.of(
-                "courses",
                 courseId.toString(),
                 "tasks",
                 taskId.toString(),
@@ -128,13 +152,28 @@ public class FileService {
 
     public Path generateSolutionFilePath(UUID courseId, UUID taskId, UUID solutionId, UUID fileId, String extension){
         return Path.of(
-                "courses",
                 courseId.toString(),
                 "tasks",
                 taskId.toString(),
                 "solutions",
                 solutionId.toString(),
                 fileId.toString() + "." + extension
+        );
+    }
+
+    public Path generateTaskCataloguePath(UUID courseId, UUID taskId){
+        return Path.of(
+                courseId.toString(),
+                "tasks",
+                taskId.toString()
+        );
+    }
+
+    public Path generateCourseMaterialCataloguePath(UUID courseId, UUID courseMaterialId) {
+        return Path.of(
+                courseId.toString(),
+                "course_materials",
+                courseMaterialId.toString()
         );
     }
 

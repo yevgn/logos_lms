@@ -16,13 +16,18 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
 
-    @Query(value = "SELECT u FROM User u WHERE u.institution.id = :institutionId AND u.group = :group")
+    @Query(value = "SELECT u FROM User u WHERE u.institution.id = :institutionId AND u.group.name = :group")
     List<User> findAllByInstitutionIdAndGroup(UUID institutionId, String group);
 
     @Query(value = "SELECT u FROM User u WHERE u.institution.id = :institutionId")
     List<User> findAllByInstitutionId(UUID institutionId);
 
-    @Query(value = "SELECT u FROM User u WHERE u.id IN :idList")
+    @Query("""
+            SELECT u FROM User u
+            LEFT JOIN FETCH u.institution
+            LEFT JOIN FETCH u.group
+            WHERE u.id IN :idList
+            """)
     List<User> findAllByIdList(@Param("idList") List<UUID> idList);
 
     void deleteByEmail(String email);
@@ -33,7 +38,17 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT cu.user FROM CourseUser cu WHERE cu.course.id = :courseId")
     List<User> findAllByCourseId(UUID courseId);
 
-    @Query("SELECT cu.user FROM CourseUser cu WHERE cu.user.institution.id = :institutionId AND " +
-            "cu.course.id != :courseId")
+    @Query("""
+             SELECT u FROM User u
+             JOIN FETCH u.institution
+             LEFT JOIN FETCH u.group g
+             LEFT JOIN FETCH g.institution
+             WHERE NOT EXISTS (
+                 SELECT cu FROM CourseUser cu
+                 WHERE cu.user.id = u.id
+                 AND cu.course.id = :courseId
+            )
+            AND u.institution.id = :institutionId
+            """)
     List<User> findAllByInstitutionIdNotInCourse(UUID institutionId, UUID courseId);
 }

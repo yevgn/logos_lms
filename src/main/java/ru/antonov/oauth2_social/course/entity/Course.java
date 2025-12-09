@@ -38,22 +38,17 @@ public class Course {
     @JoinColumn(name = "institution_id")
     private Institution institution;
 
-    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
+    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     private Set<CourseUser> courseUsers = new HashSet<>();
 
-    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
+    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE} )
     private Set<CourseMaterial> courseMaterials = new HashSet<>();
 
-    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
+    @OneToMany(mappedBy = "course", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     private Set<Task> tasks = new HashSet<>();
 
     @Version
     private Long version;
-
-    public void addCourseUsers(Set<CourseUser> courseUsers) {
-        this.courseUsers.addAll(courseUsers);
-        courseUsers.forEach(cu -> cu.setCourse(this));
-    }
 
     public void addCourseUser(CourseUser courseUser) {
         this.courseUsers.add(courseUser);

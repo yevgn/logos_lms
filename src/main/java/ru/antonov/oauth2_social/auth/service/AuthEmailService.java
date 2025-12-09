@@ -16,9 +16,9 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import ru.antonov.oauth2_social.config.MailSendFailure;
 import ru.antonov.oauth2_social.config.MailSendFailureRepository;
-import ru.antonov.oauth2_social.exception.MailAuthenticationEx;
-import ru.antonov.oauth2_social.exception.MailSendEx;
-import ru.antonov.oauth2_social.exception.MessagingEx;
+import ru.antonov.oauth2_social.common.exception.MailAuthenticationEx;
+import ru.antonov.oauth2_social.common.exception.MailSendEx;
+import ru.antonov.oauth2_social.common.exception.MessagingEx;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.util.Arrays;
@@ -79,7 +79,7 @@ public class AuthEmailService {
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
                         "<p>Перейдите по ссылке, чтобы активировать ваш аккаунт. После активации вы сможете пользоваться " +
                         "всеми услугами сервиса</p>" +
-                        "<p><a href=\"%s?account_activation_token=%s&user_email=%s\">Подтвердить</a></p>",
+                        "<p><a href=\"%s?token=%s&user_email=%s\">Подтвердить</a></p>",
                 user.getSurname(), user.getName(),
                 user.getPatronymic() == null ? "" : user.getPatronymic(),
                 activateAccountUrl, accountActivationToken, user.getEmail());
@@ -104,7 +104,7 @@ public class AuthEmailService {
         String subject = "Сброс 2FA секретного ключа в Logos LMS";
 
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
-                        "<p>Перейдите по ссылке, чтобы сбросить 2FA секрет:</p>" +
+                        "<p>Перейдите по ссылке, чтобы сбросить :</p>" +
                         "<p><a href=\"%s?token=%s&user_email=%s\">Подтвердить</a></p>",
                 user.getSurname(), user.getName(),
                 user.getPatronymic() == null ? "" : user.getPatronymic(),
@@ -114,10 +114,10 @@ public class AuthEmailService {
     }
 
     public void sendTfaSuccessfulResetNotification(User user) {
-        String subject = "Ваш 2FA секретный ключ в Logos LMS был изменен";
+            String subject = "Двухфакторная аутентификация в Logos LMS была отключена";
 
         String htmlText = String.format("<p>Добрый день, %s %s %s!</p>" +
-                        "<p>Ваш 2FA секретный ключ был успешно изменен</p>",
+                        "<p>На вашем аккаунте в Logos LMS была отключена двухфакторная аутентификация </p>",
                 user.getSurname(), user.getName(),
                 user.getPatronymic() == null ? "" : user.getPatronymic()
         );

@@ -5,19 +5,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import ru.antonov.oauth2_social.course.entity.*;
-import ru.antonov.oauth2_social.exception.AppConfigurationEx;
+import ru.antonov.oauth2_social.common.exception.AppConfigurationEx;
 import ru.antonov.oauth2_social.course.repository.*;
 import ru.antonov.oauth2_social.solution.entity.Solution;
+import ru.antonov.oauth2_social.solution.entity.SolutionComment;
+import ru.antonov.oauth2_social.solution.repository.SolutionCommentRepository;
 import ru.antonov.oauth2_social.solution.repository.SolutionRepository;
 import ru.antonov.oauth2_social.task.entity.Task;
+import ru.antonov.oauth2_social.task.entity.TaskComment;
 import ru.antonov.oauth2_social.task.entity.TaskUserKey;
+import ru.antonov.oauth2_social.task.repository.TaskCommentRepository;
 import ru.antonov.oauth2_social.task.repository.TaskRepository;
 import ru.antonov.oauth2_social.task.repository.TaskUserRepository;
 import ru.antonov.oauth2_social.user.entity.Group;
 import ru.antonov.oauth2_social.user.entity.Role;
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.user.repository.GroupRepository;
-import ru.antonov.oauth2_social.user.repository.UserRepository;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -33,7 +36,9 @@ public class AccessManager {
     private final SolutionRepository solutionRepository;
     private final TaskUserRepository taskUserRepository;
     private final GroupRepository groupRepository;
-    private final UserRepository userRepository;
+
+    private final TaskCommentRepository taskCommentRepository;
+    private final SolutionCommentRepository solutionCommentRepository;
 
     public boolean isUserHasAccessToOther(User userRequestedForAccess, User toAccessTo, boolean isNeedToHaveHigherPriority,
                                           boolean isNeedToBeInOneInstitution) {
@@ -192,58 +197,35 @@ public class AccessManager {
         return true;
     }
 
-    public boolean isPrincipalHasAccessToTaskComment(User principal, UUID taskId, UUID commentId) {
-        Optional<Task> taskOpt = taskRepository.findById(taskId);
-        if (taskOpt.isEmpty()) return false;
-
-        Task task = taskOpt.get();
-
-        Optional<Task.TaskComment> commentOpt = task.getComments()
-                .stream()
-                .filter(t -> t.getId().equals(commentId))
-                .findFirst();
-
+    public boolean isPrincipalHasAccessToEditTaskComment(User principal, UUID commentId) {
+        Optional<TaskComment> commentOpt = taskCommentRepository.findById(commentId);
         if (commentOpt.isEmpty()) return false;
 
-        Task.TaskComment comment = commentOpt.get();
+        TaskComment comment = commentOpt.get();
 
-        Optional<User> commentAuthor = userRepository.findById(comment.getUserId());
+        User commentAuthor = comment.getAuthor();
 
-        if (principal.getRole().equals(Role.ADMIN)) {
-            return isPrincipalHasAccessToTask(principal, taskId);
-        } else if (principal.getRole().equals(Role.TUTOR) || principal.getRole().equals(Role.STUDENT)) {
-            return isPrincipalHasAccessToTask(principal, taskId) &&
-                    principal.getRole().getPriorityValue() >
-                            commentAuthor.map(user -> user.getRole().getPriorityValue()).orElse(0);
-        } else {
-            throw new AppConfigurationEx(
-                    "Ошибка на сервере",
-                    String.format("Ошибка проверки доступа пользователя %s к комментарию %s. Не уставновлены правила доступа" +
-                            " для роли %s", principal.getEmail(), commentId, principal.getRole().name())
-            );
-        }
+        boolean isCommentAuthor = commentAuthor != null && principal.getId().equals(commentAuthor.getId());
+        boolean hasAccessToTask = isPrincipalHasAccessToTask(principal, comment.getTask().getId());
+        boolean hasMorePrivilegedRoleThanCommentAuthor = commentAuthor != null &&
+                principal.getRole().getPriorityValue() > commentAuthor.getRole().getPriorityValue();
+
+        return isCommentAuthor || (hasAccessToTask && hasMorePrivilegedRoleThanCommentAuthor);
     }
 
-    public boolean isPrincipalHasAccessToSolutionComment(User principal, UUID solutionId, UUID commentId) {
-        Optional<Solution> solutionOpt = solutionRepository.findById(solutionId);
-        if (solutionOpt.isEmpty()) return false;
-
-        Solution solution = solutionOpt.get();
-
-        Optional<Solution.SolutionComment> commentOpt = solution.getComments()
-                .stream()
-                .filter(c -> c.getId().equals(commentId))
-                .findFirst();
-
+    public boolean isPrincipalHasAccessToEditSolutionComment(User principal, UUID commentId) {
+        Optional<SolutionComment> commentOpt = solutionCommentRepository.findById(commentId);
         if (commentOpt.isEmpty()) return false;
 
-        Solution.SolutionComment comment = commentOpt.get();
+        SolutionComment comment = commentOpt.get();
 
-        Optional<User> commentAuthor = userRepository.findById(comment.getUserId());
+        User commentAuthor = comment.getAuthor();
 
-        return isPrincipalHasAccessToSolution(principal, solutionId) &&
-                (principal.getRole().getPriorityValue() >
-                        commentAuthor.map(user -> user.getRole().getPriorityValue()).orElse(0))
-                || principal.getId().equals(comment.getUserId());
+        boolean isCommentAuthor = commentAuthor != null && principal.getId().equals(commentAuthor.getId());
+        boolean hasAccessToSolution = isPrincipalHasAccessToSolution(principal, comment.getSolution().getId());
+        boolean hasMorePrivilegedRoleThanCommentAuthor = commentAuthor != null &&
+                principal.getRole().getPriorityValue() > commentAuthor.getRole().getPriorityValue();
+
+        return isCommentAuthor || (hasAccessToSolution && hasMorePrivilegedRoleThanCommentAuthor);
     }
 }

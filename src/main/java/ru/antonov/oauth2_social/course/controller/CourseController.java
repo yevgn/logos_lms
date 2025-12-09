@@ -3,6 +3,7 @@ package ru.antonov.oauth2_social.course.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -10,12 +11,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -25,6 +27,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import ru.antonov.oauth2_social.common.exception.*;
 import ru.antonov.oauth2_social.config.AccessManager;
 import ru.antonov.oauth2_social.course.dto.*;
 
@@ -33,16 +36,15 @@ import ru.antonov.oauth2_social.course.entity.CourseMaterial;
 import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.course.service.CourseService;
 
-import ru.antonov.oauth2_social.exception.AccessDeniedEx;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
-import ru.antonov.oauth2_social.exception.FileNotFoundEx;
-import ru.antonov.oauth2_social.exception.IOEx;
 import ru.antonov.oauth2_social.user.dto.DtoFactory;
 import ru.antonov.oauth2_social.user.dto.UserShortResponseDto;
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.user.service.UserService;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -281,8 +283,18 @@ public class CourseController {
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId
     ) {
+        Course course = courseService.findById(courseId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Ошибка. Курс не найден",
+                        String.format("Ошибка при удалении курса пользователем %s. " +
+                                        "Курса с id %s не существует",
+                                principal.getId(),
+                                courseId
+                        )
+                ));
+
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, true, true);
-        courseService.deleteById(courseId);
+        courseService.deleteCourse(principal, course);
 
         return ResponseEntity.ok().build();
     }
@@ -347,11 +359,11 @@ public class CourseController {
     public ResponseEntity<List<UserShortResponseDto>> addUsersToCourseByUserIdList(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
-            @RequestBody List<UUID> userIdList
+            @NotEmpty(message = "Тело запроса не может быть пустым") @RequestBody List<UUID> userIdList
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
-        return ResponseEntity.ok(courseService.addUsersToCourseByUserIdList(principal, courseId, userIdList, principal));
+        return ResponseEntity.ok(courseService.addUsersToCourseByUserIdList(principal, courseId, userIdList));
     }
 
     @Operation(
@@ -414,13 +426,12 @@ public class CourseController {
     public ResponseEntity<List<UserShortResponseDto>> addUsersToCourseByGroupIdList(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
-            @RequestBody List<UUID> groupIdList
+            @NotEmpty(message = "Тело запроса не может быть пустым") @RequestBody List<UUID> groupIdList
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
-        return ResponseEntity.ok(courseService.addUsersToCourseByGroupIdList(principal, courseId, groupIdList, principal));
+        return ResponseEntity.ok(courseService.addUsersToCourseByGroupIdList(principal, courseId, groupIdList));
     }
-
 
     @Operation(
             summary = "Удаление пользователей из курса",
@@ -452,17 +463,6 @@ public class CourseController {
                                           "message": "Ошибка. Курса с указанным id не существует"
                                         }
                                     """)
-                    )),
-            @ApiResponse(responseCode = "409",
-                    description = "Конфликт версий данных",
-                    content = @io.swagger.v3.oas.annotations.media.Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "409",
-                                          "message": "Курс был изменен. Повторите попытку"
-                                        }
-                                    """)
                     ))
     }
     )
@@ -470,11 +470,11 @@ public class CourseController {
     public ResponseEntity<?> removeUsersFromCourseByUserIdList(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId,
-            @RequestBody List<UUID> userIdList
+            @NotEmpty(message = "Тело запроса не может быть пустым") @RequestBody List<UUID> userIdList
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, true);
 
-        courseService.removeUsersFromCourseByUserIdList(courseId, userIdList);
+        courseService.removeUsersFromCourseByUserIdList(principal, courseId, userIdList);
 
         return ResponseEntity.ok().build();
     }
@@ -590,7 +590,13 @@ public class CourseController {
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<CourseShortResponseDto>> getCoursesByUserId(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID userId
+            @PathVariable UUID userId,
+            @Parameter(
+                    description = "Флаг. Если TRUE - вернет список курсов, создателем которых является пользователь." +
+                            " Если FALSE - вернет список курсов, в которых пользователь является обычным участником." +
+                            " Если флаг отсутствует, вернет список всех курсов пользователя (где он и создатель, и участник)"
+            )
+            @RequestParam(value = "is_creator", required = false) Boolean isCreator
     ) {
 
         User user = userService.findById(userId)
@@ -602,11 +608,12 @@ public class CourseController {
 
         checkPrincipalHasAccessToOtherOrElseThrow(principal, user, true, true);
 
-        return ResponseEntity.ok(courseService.findCoursesByUserId(principal, userId));
+        return ResponseEntity.ok(courseService.findCoursesByUserId(principal, userId, isCreator));
     }
 
+
     @Operation(
-            summary = "Добавление учебных материалов в курс",
+            summary = "Добавление учебного материала в курс",
             description = "Требуется роль TUTOR или ADMIN",
             security = @SecurityRequirement(name = "bearerAuth")
     )
@@ -636,17 +643,6 @@ public class CourseController {
                                         }
                                     """)
                     )),
-            @ApiResponse(responseCode = "409",
-                    description = "Конфликт версий данных",
-                    content = @io.swagger.v3.oas.annotations.media.Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "409",
-                                          "message": "Курс был изменен. Повторите попытку"
-                                        }
-                                    """)
-                    )),
             @ApiResponse(responseCode = "500",
                     description = "Ошибка при сохранении файлов на диск",
                     content = @io.swagger.v3.oas.annotations.media.Content(
@@ -672,8 +668,63 @@ public class CourseController {
     }
 
     @Operation(
+            summary = "Поиск учебного материала по id",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @Tag(name = "Управление курсами")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403",
+                    description = "Нет доступа",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "403",
+                                          "message": "Ошибка доступа. У вас нет доступа к этому курсу"
+                                        }
+                                    """)
+                    )),
+            @ApiResponse(responseCode = "400",
+                    description = "Некорректные  данные или они отсутствуют",
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                        {
+                                          "status" : "400",
+                                          "message": "Учебного материала с указанным id не существует"
+                                        }
+                                    """)
+                    ))
+    }
+    )
+    @GetMapping(value = "/materials/{materialId}")
+    public ResponseEntity<CourseMaterialResponseDto> findCourseMaterial(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID materialId
+    ) {
+        CourseMaterial courseMaterial = courseService.findCourseMaterialById(materialId)
+                .orElseThrow(() ->
+                        new EntityNotFoundEx(
+                                "Такого учебного материала не существует",
+                                String.format("Ошибка при поиске учебного материала пользователем %s. Учебного материала" +
+                                        " с id %s не существует", principal.getId(), materialId
+                                )
+                        )
+                );
+
+        checkPrincipalHasAccessToCourseOrElseThrow(
+                principal, courseMaterial.getCourse().getId(), false, false
+        );
+
+        return ResponseEntity.ok(ru.antonov.oauth2_social.course.dto.DtoFactory.makeCourseMaterialResponseDto(courseMaterial));
+    }
+
+    @Operation(
             summary = "Удаление учебного материала по id",
-            description = "Требуется роль TUTOR или ADMIN. Удалить учебный материал может только создатель курса",
+            description = "Требуется роль TUTOR или ADMIN. Удалить учебный материал может только админ," +
+                    " создатель курса, а также автор этого учебного материала ",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -726,19 +777,18 @@ public class CourseController {
                     ))
     }
     )
-    @DeleteMapping("/{courseId}/materials")
+    @DeleteMapping("/materials/{materialId}")
     public ResponseEntity<?> deleteCourseMaterial(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID courseId,
-            @RequestParam("course_material_id") UUID courseMaterialId
+            @PathVariable UUID materialId
     ) {
-        CourseMaterial courseMaterial = courseService.findCourseMaterialById(courseMaterialId)
+        CourseMaterial courseMaterial = courseService.findCourseMaterialById(materialId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Учебный материал не найден",
                         String.format("Ошибка при удалении учебного материала пользователем %s. " +
                                         "Учебного материала с id %s не существует",
                                 SecurityContextHolder.getContext().getAuthentication().getName(),
-                                courseMaterialId
+                                materialId
                         )
                 ));
 
@@ -750,7 +800,8 @@ public class CourseController {
 
     @Operation(
             summary = "Обновление учебного материала по id",
-            description = "Требуется роль TUTOR или ADMIN. Обновить материал может только тот преподаватель, который его выложил",
+            description = "Требуется роль TUTOR или ADMIN. Обновить материал может только админ, создатель курса, а также" +
+                    " автор этого учебного материала",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление курсами")
@@ -764,7 +815,7 @@ public class CourseController {
                             examples = @ExampleObject(value = """
                                         {
                                           "status" : "403",
-                                          "message": "Ошибка доступа. Вы не являетесь автором этого учебного материала"
+                                          "message": "Ошибка доступа. У вас нет прав на обновление этого учебного материала"
                                         }
                                     """)
                     )),
@@ -803,20 +854,19 @@ public class CourseController {
                     ))
     }
     )
-    @PatchMapping(value = "/{courseId}/materials", consumes = "multipart/form-data")
+    @PatchMapping(value = "/materials/{materialId}", consumes = "multipart/form-data")
     public ResponseEntity<CourseMaterialResponseDto> updateCourseMaterial(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID courseId,
-            @RequestParam("course_material_id") UUID courseMaterialId,
+            @PathVariable UUID materialId,
             @Valid @ModelAttribute CourseMaterialUpdateRequestDto request
     ) {
-        CourseMaterial courseMaterial = courseService.findCourseMaterialById(courseMaterialId)
+        CourseMaterial courseMaterial = courseService.findCourseMaterialById(materialId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Учебный материал не найден",
                         String.format("Ошибка при обновлении учебного материала пользователем %s. " +
                                         "Учебного материала с id %s не существует",
-                                SecurityContextHolder.getContext().getAuthentication().getName(),
-                                courseMaterialId
+                                principal.getId(),
+                                materialId
                         )
                 ));
 
@@ -928,8 +978,7 @@ public class CourseController {
                         "Ошибка. Учебный материал не найден",
                         String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
                                         "Учебного материала с id %s не существует",
-                                SecurityContextHolder.getContext().getAuthentication().getName(),
-                                materialId
+                                principal.getId(), materialId
                         )
                 ));
 
@@ -938,8 +987,7 @@ public class CourseController {
                     "Ошибка. В данном курсе нет такого учебного материала",
                     String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
                                     "в курсе %s не существует учебного материала %s",
-                            SecurityContextHolder.getContext().getAuthentication().getName(),
-                            courseId, materialId
+                            principal.getId(), courseId, materialId
                     )
             );
         }
@@ -952,25 +1000,41 @@ public class CourseController {
                                 "Ошибка. Такого файла не существует",
                                 String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
                                                 "В учебном материале %s не существует файла %s",
-                                        SecurityContextHolder.getContext().getAuthentication().getName(),
+                                        principal.getId(),
                                         materialId,
                                         fileId
                                 )
                         )
                 );
 
-        Resource resource = courseService.getCourseMaterialFile(file.getPath());
+        try {
+            Resource resource = courseService.getCourseMaterialFile(file.getPath());
+            String disposition = download ? "attachment" : "inline";
+            String contentType = courseService.resolveContentType(file.getOriginalFileName());
+            String encodedFileName = URLEncoder.encode(file.getOriginalFileName(), StandardCharsets.UTF_8)
+                    .replace("+", "%20");
 
-        String disposition = download ? "attachment" : "inline";
-        String contentType = courseService.resolveContentType(file.getOriginalFileName());
-
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        disposition + "; filename=\"" + file.getOriginalFileName() + "\""
-                )
-                .body(resource);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(
+                            HttpHeaders.CONTENT_DISPOSITION,
+                            String.format("%s; filename*=UTF-8''%s", disposition, encodedFileName)
+                    )
+                    .body(resource);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentEx(
+                    "Ошибка. Файл не найден",
+                    String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
+                            "Файл %s не найден", principal.getId(), fileId
+                    )
+            );
+        } catch (MalformedURLException ex) {
+            throw new MalformedFileUrlEx(
+                    "Ошибка на сервере",
+                    String.format("Ошибка при получении файла courseMaterial пользователем %s.\n%s",
+                            principal.getId(), ex.getMessage())
+            );
+        }
     }
 
     @Operation(
@@ -1030,7 +1094,7 @@ public class CourseController {
                         "Ошибка. Учебный материал не найден",
                         String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
                                         "Учебного материала с id %s не существует",
-                                SecurityContextHolder.getContext().getAuthentication().getName(),
+                                principal.getId(),
                                 materialId
                         )
                 ));
@@ -1040,7 +1104,7 @@ public class CourseController {
                     "Ошибка. В данном курсе нет такого учебного материала",
                     String.format("Ошибка при получении файла courseMaterial пользователем %s. " +
                                     "в курсе %s не существует учебного материала %s",
-                            SecurityContextHolder.getContext().getAuthentication().getName(),
+                            principal.getId(),
                             courseId, materialId
                     )
             );
@@ -1049,12 +1113,18 @@ public class CourseController {
         List<Content> files = courseMaterial.getContent();
 
         response.setContentType("application/zip");
-        response.setHeader("Content-Disposition", "attachment; filename=\"" + courseMaterial.getTopic() + "\"");
+
+        String encodedFileName = URLEncoder.encode(courseMaterial.getTopic(), StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        response.setHeader(
+                HttpHeaders.CONTENT_DISPOSITION,
+                String.format("attachment; filename*=UTF-8''%s", encodedFileName)
+        );
 
         try (ZipOutputStream zipOut = new ZipOutputStream(response.getOutputStream())) {
             for (Content file : files) {
                 Path filePath = Paths.get(basePath).resolve(file.getPath());
-                Resource resource = new UrlResource(filePath.toUri());
+                Resource resource = new FileSystemResource(filePath);
 
                 if (resource.exists() && resource.isReadable()) {
                     zipOut.putNextEntry(new ZipEntry(file.getOriginalFileName()));
@@ -1104,23 +1174,24 @@ public class CourseController {
     }
     )
     @GetMapping("/{courseId}/users")
-    public ResponseEntity<List<UserShortResponseDto>> findUsersByCourseId(
+    public ResponseEntity<CourseUsersWithCreatorShortResponseDto> findUsersByCourseId(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID courseId
     ) {
         checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
 
-        List<User> users = userService.findAllByCourseId(courseId);
+        List<User> users = courseService.findUsersByCourseIdExcludeCreator(courseId);
+        User creator = courseService.findCourseCreator(courseId).orElse(null);
 
         return ResponseEntity.ok(
-                users.stream()
-                        .map(ru.antonov.oauth2_social.user.dto.DtoFactory::makeUserShortResponseDto)
-                        .toList()
+                ru.antonov.oauth2_social.course.dto.DtoFactory.makeCourseUsersWithCreatorShortResponseDto(
+                        creator, users
+                )
         );
     }
 
     @Operation(
-            summary = "Получение информации о пользователях" +
+            summary = "Получение информации о пользователях учебного заведения" +
                     ", которые не состоят в курсе с указанным id",
             description = "В теле ответа будут пользователи все пользователи из учебного заведения, которые " +
                     "не состоят в курсе с указанным id",
@@ -1197,11 +1268,10 @@ public class CourseController {
         )
         ) {
             throw new AccessDeniedEx(
-                    "Ошибка доступа. Вы не являетесь создателем курса или автором учебного материала",
+                    "Ошибка доступа. Вы не являетесь админом, создателем курса или автором учебного материала",
                     String.format(
-                            "Ошибка доступа. Пользователь %s не является создателем курса %s или" +
-                                    " автором материала %s",
-                            principal.getId(), courseMaterial.getCourse().getId(), courseMaterial.getId()
+                            "Ошибка доступа. Пользователь %s не имеет прав на изменение учебного материала %s",
+                            principal.getId(), courseMaterial.getId()
                     )
             );
         }
@@ -1230,7 +1300,7 @@ public class CourseController {
     }
 
     private void checkPrincipalHasAccessToOtherOrElseThrow(User user, User other, boolean isNeedToHaveHigherPriority,
-                                                      boolean isNeedToBeInOneInstitute) {
+                                                           boolean isNeedToBeInOneInstitute) {
         if (Objects.equals(user.getId(), other.getId())) {
             return;
         }

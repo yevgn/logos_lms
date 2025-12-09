@@ -1,6 +1,5 @@
 package ru.antonov.oauth2_social.task.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
@@ -16,7 +15,6 @@ import java.util.UUID;
 @Builder
 @Getter
 @Setter
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class TaskResponseDto {
     private UUID id;
     private String title;

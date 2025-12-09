@@ -5,16 +5,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.NestedExceptionUtils;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.common.FileService;
+import ru.antonov.oauth2_social.common.exception.*;
 import ru.antonov.oauth2_social.config.AccessManager;
 import ru.antonov.oauth2_social.course.dto.*;
 import ru.antonov.oauth2_social.course.entity.*;
@@ -22,7 +22,6 @@ import ru.antonov.oauth2_social.course.exception.*;
 import ru.antonov.oauth2_social.course.repository.CourseMaterialRepository;
 import ru.antonov.oauth2_social.course.repository.CourseRepository;
 import ru.antonov.oauth2_social.course.repository.CourseUserRepository;
-import ru.antonov.oauth2_social.exception.*;
 import ru.antonov.oauth2_social.user.dto.UserShortResponseDto;
 import ru.antonov.oauth2_social.user.entity.Role;
 import ru.antonov.oauth2_social.user.entity.User;
@@ -97,7 +96,7 @@ public class CourseService {
             }
 
             throw new DBConstraintViolationEx(message, debugMessage);
-        }  catch (OptimisticLockException ex) {
+        } catch (OptimisticLockException ex) {
             throw new EntityLockEx(
                     "Курс был изменен другим пользователем. Повторите попытку",
                     String.format("Ошибка при измении курса пользователем %s. Курс %s был " +
@@ -107,7 +106,14 @@ public class CourseService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public CourseResponseDto save(CourseCreateWithUserIdListRequestDto request, User creator) {
+    public CourseResponseDto save(CourseCreateWithUserIdListRequestDto request, User principal) {
+        User creator = userService.findById(principal.getId())
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Пользователя, который пытается создать курс, не существует",
+                        String.format("Ошибка при создании курса пользователем" +
+                                "Пользователя principal с id %s не существует", principal.getId())
+                ));
+
         List<User> users = new ArrayList<>();
         if (request.getUserIdList() != null && !request.getUserIdList().isEmpty()) {
             users = userService.findAllByIdList(request.getUserIdList());
@@ -119,12 +125,38 @@ public class CourseService {
 
         String code = generateCourseCode();
         Course course = EntityFactory.makeCourseEntity(request, creator.getInstitution(), code);
+        save(course, users, creator);
 
-        return save(course, users, creator);
+        Path courseCataloguePath = Paths.get(basePath, course.getId().toString());
+        fileService.createDirectory(courseCataloguePath);
+        Path courseMaterialsCataloguePath = courseCataloguePath.resolve("materials");
+        fileService.createDirectory(courseMaterialsCataloguePath);
+        Path tasksCataloguePath = courseCataloguePath.resolve("tasks");
+        fileService.createDirectory(tasksCataloguePath);
+
+        List<User> usersExcludeCreator = course.getCourseUsers()
+                .stream()
+                .filter(cu -> !cu.isCreator())
+                .map(CourseUser::getUser).toList();
+
+        usersExcludeCreator.forEach(u -> courseEmailService.sendCourseJoinNotification(u, course));
+
+        return DtoFactory.makeCourseResponseDto(
+                course,
+                creator,
+                usersExcludeCreator
+        );
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public CourseResponseDto save(CourseCreateWithGroupIdListRequestDto request, User creator) {
+    public CourseResponseDto save(CourseCreateWithGroupIdListRequestDto request, User principal) {
+        User creator = userService.findById(principal.getId())
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        "Пользователя, который пытается создать курс, не существует",
+                        String.format("Ошибка при создании курса пользователем" +
+                                "Пользователя principal с id %s не существует", principal.getId())
+                ));
+
         List<User> users = new ArrayList<>();
         if (request.getGroupIdList() != null && !request.getGroupIdList().isEmpty()) {
             users = userService.findAllByGroupIdList(request.getGroupIdList());
@@ -136,8 +168,27 @@ public class CourseService {
 
         String code = generateCourseCode();
         Course course = EntityFactory.makeCourseEntity(request, creator.getInstitution(), code);
+        save(course, users, creator);
 
-        return save(course, users, creator);
+        Path courseCataloguePath = Paths.get(basePath, course.getId().toString());
+        fileService.createDirectory(courseCataloguePath);
+        Path courseMaterialsCataloguePath = courseCataloguePath.resolve("course_materials");
+        fileService.createDirectory(courseMaterialsCataloguePath);
+        Path tasksCataloguePath = courseCataloguePath.resolve("tasks");
+        fileService.createDirectory(tasksCataloguePath);
+
+        List<User> usersExcludeCreator = course.getCourseUsers()
+                .stream()
+                .filter(cu -> !cu.isCreator())
+                .map(CourseUser::getUser).toList();
+
+        usersExcludeCreator.forEach(u -> courseEmailService.sendCourseJoinNotification(u, course));
+
+        return DtoFactory.makeCourseResponseDto(
+                course,
+                creator,
+                usersExcludeCreator
+        );
     }
 
     private void checkUserHasAccessToOtherOrElseThrow(User user, User other, boolean isNeedToHaveHigherPriority,
@@ -157,20 +208,8 @@ public class CourseService {
         }
     }
 
-    private CourseResponseDto save(Course course, List<User> users, User creator) {
+    private Course save(Course course, List<User> users, User creator) {
         course.setCreatedAt(LocalDateTime.now());
-        courseRepository.saveAndFlush(course);
-
-        if (courseLimitCounter.isUserAmountForCourseExceedsLimit(users.size(), course.getId())) {
-            throw new UserAmountForCourseLimitExceededEx(
-                    String.format("Ошибка создания курса. Превышено максимально допустимое число пользователей" +
-                            " в рамках курса - %s", maxUserAmountForCourse
-                    ),
-                    String.format("Ошибка создания курса. Ошибка создания курса пользователем %s. Превышено число " +
-                            "maxUserAmountForCourse", creator.getId())
-
-            );
-        }
 
         Set<CourseUser> courseUsers = users.stream()
                 .filter(u -> !u.equals(creator))
@@ -208,7 +247,7 @@ public class CourseService {
             String debugMessage;
 
             if (root instanceof SQLException sqlEx && sqlEx.getMessage().toLowerCase().contains("unique") &&
-                    sqlEx.getMessage().toLowerCase().contains("name")) {
+                    sqlEx.getMessage().toLowerCase().contains("name_institution_id")) {
                 message = "Ошибка. В данном учебном заведении уже существует курс с таким названием";
                 debugMessage = String.format("Ошибка при создании курса. " +
                         "В учебном заведении %s уже существует курс с названием %s", course.getInstitution().getId(), course.getName());
@@ -225,13 +264,18 @@ public class CourseService {
             throw new DBConstraintViolationEx(message, debugMessage);
         }
 
-        users.forEach(u -> courseEmailService.sendCourseJoinNotification(u, course));
+        if (courseLimitCounter.isUserAmountForCourseExceedsLimit(users.size(), course.getId())) {
+            throw new UserAmountForCourseLimitExceededEx(
+                    String.format("Ошибка создания курса. Превышено максимально допустимое число пользователей" +
+                            " в рамках курса - %s", maxUserAmountForCourse
+                    ),
+                    String.format("Ошибка создания курса. Ошибка создания курса пользователем %s. Превышено число " +
+                            "maxUserAmountForCourse", creator.getId())
 
-        return DtoFactory.makeCourseResponseDto(
-                course,
-                creator,
-                courseUsers.stream().map(CourseUser::getUser).toList()
-        );
+            );
+        }
+
+        return course;
     }
 
     private void checkPrincipalHasAccessToCourseOrElseThrow(
@@ -249,9 +293,18 @@ public class CourseService {
         return CourseCodeGenerator.generateCourseCode();
     }
 
-    public void deleteById(UUID courseId) {
-        courseRepository.deleteById(courseId);
-        Path courseDirPath = Path.of("courses", courseId.toString());
+    public void deleteCourse(User principal, Course course) {
+        try {
+            courseRepository.delete(course);
+        } catch (OptimisticLockException ex) {
+            throw new EntityLockEx(
+                    "Курс был изменен другим пользователем. Повторите попытку",
+                    String.format("Ошибка при удалении курса пользователем %s. Курс %s был " +
+                            "изменен другим пользователем", principal.getId(), course.getId())
+            );
+        }
+
+        Path courseDirPath = Path.of(course.getId().toString());
         fileService.deleteDirectory(courseDirPath);
     }
 
@@ -261,8 +314,7 @@ public class CourseService {
         );
     }
 
-    @Transactional(rollbackFor = Exception.class)
-    public List<UserShortResponseDto> addUsersToCourseByUserIdList(User principal, UUID courseId, List<UUID> userIdList, User tutor) {
+    public List<UserShortResponseDto> addUsersToCourseByUserIdList(User principal, UUID courseId, List<UUID> userIdList) {
         Course course = findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Курса с указанным id не существует",
@@ -271,11 +323,10 @@ public class CourseService {
                 ));
 
         List<User> users = userService.findAllByIdList(userIdList);
-        return addUsersToCourse(principal, course, users, tutor);
+        return addUsersToCourse(principal, course, users);
     }
 
-    @Transactional(rollbackFor = Exception.class)
-    public List<UserShortResponseDto> addUsersToCourseByGroupIdList(User principal, UUID courseId, List<UUID> groupIdList, User tutor) {
+    public List<UserShortResponseDto> addUsersToCourseByGroupIdList(User principal, UUID courseId, List<UUID> groupIdList) {
         Course course = findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         String.format("Ошибка. Курса с id %s не существует", courseId),
@@ -284,7 +335,7 @@ public class CourseService {
                 ));
 
         List<User> users = userService.findAllByGroupIdList(groupIdList);
-        return addUsersToCourse(principal, course, users, tutor);
+        return addUsersToCourse(principal, course, users);
     }
 
     private void checkIsAnyUserAlreadyJoinedCourse(List<User> users, UUID courseId) {
@@ -300,9 +351,9 @@ public class CourseService {
         });
     }
 
-    private List<UserShortResponseDto> addUsersToCourse(User principal, Course course, List<User> users, User tutor) {
+    private List<UserShortResponseDto> addUsersToCourse(User principal, Course course, List<User> users) {
         users.forEach(u ->
-                checkUserHasAccessToOtherOrElseThrow(tutor, u, false, true)
+                checkUserHasAccessToOtherOrElseThrow(principal, u, false, true)
         );
         checkIsAnyUserAlreadyJoinedCourse(users, course.getId());
 
@@ -314,11 +365,11 @@ public class CourseService {
                     ),
                     String.format("Ошибка добавления пользователей в курс. Ошибка добавления пользователей в курс %s" +
                                     " пользователем %s. Превышено число maxUserAmountForCourse",
-                            course.getId(), tutor.getId())
+                            course.getId(), principal.getId())
             );
         }
 
-        Set<CourseUser> courseUsers = users.stream()
+        List<CourseUser> courseUsers = users.stream()
                 .map(u -> {
                             CourseUserKey key = new CourseUserKey(course.getId(), u.getId());
                             return CourseUser
@@ -329,18 +380,17 @@ public class CourseService {
                                     .build();
                         }
                 )
-                .collect(Collectors.toSet());
-
-        course.addCourseUsers(courseUsers);
+                .toList();
 
         try {
-            courseRepository.saveAndFlush(course);
+            courseUserRepository.saveAll(courseUsers);
         } catch (DataIntegrityViolationException ex) {
             Throwable root = NestedExceptionUtils.getRootCause(ex);
             String message;
             String debugMessage;
 
-            if (root instanceof SQLException sqlEx && sqlEx.getMessage().toLowerCase().contains("unique")) {
+            if (root instanceof SQLException sqlEx && sqlEx.getMessage().toLowerCase().contains("course_id") &&
+                    sqlEx.getMessage().toLowerCase().contains("user_id")) {
                 message = "Ошибка. Один или несколько пользователей, которых вы пытаетесь добавить, уже состоят " +
                         "в этом курсе";
                 debugMessage = String.format("Ошибка при добавлении пользователей в курс %s" +
@@ -352,12 +402,6 @@ public class CourseService {
             }
 
             throw new DBConstraintViolationEx(message, debugMessage);
-        } catch (OptimisticLockException ex) {
-            throw new EntityLockEx(
-                    "Ошибка. Курс бы изменен другим пользователем. Повторите попытку",
-                    String.format("Ошибка при добавлении пользователей в курс пользователем %s. Курс %s был " +
-                            "изменен другим пользователем", principal.getId(), course.getId())
-            );
         }
 
         users.forEach(u -> courseEmailService.sendCourseJoinNotification(u, course));
@@ -368,26 +412,52 @@ public class CourseService {
                 .toList();
     }
 
-    @Transactional
-    public void removeUsersFromCourseByUserIdList(UUID courseId, List<UUID> userIdList) {
+    public Optional<User> findCourseCreator(UUID courseId) {
+        return courseUserRepository.findCourseCreatorByCourseId(courseId);
+    }
+
+    public List<User> findUsersByCourseIdExcludeCreator(UUID courseId){
+        return courseUserRepository.findUsersByCourseIdExcludeCreator(courseId);
+    }
+
+    public void removeUsersFromCourseByUserIdList(User principal, UUID courseId, List<UUID> userIdList) {
         Course course = findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         String.format("Ошибка. Курса с id %s не существует", courseId),
-                        String.format("Ошибка при добавлении пользователей к курсу пользователем %s. " +
-                                "Курса с id %s не существует", SecurityContextHolder.getContext().getAuthentication().getName(), courseId)
+                        String.format("Ошибка при удалении пользователей из курса пользователем %s. " +
+                                "Курса с id %s не существует", principal.getId(), courseId)
                 ));
-        List<User> users = userService.findAllByIdList(userIdList);
 
-        course.removeUsers(users);
+        User courseCreator = findCourseCreator(courseId)
+                .orElseThrow(() -> new EntityNotFoundEx(
+                        String.format("Ошибка. Курса с id %s не существует", courseId),
+                        String.format("Ошибка при удалении пользователей из курса пользователем %s. " +
+                                "Курса с id %s не существует", principal.getId(), courseId)
+                ));
 
-        try {
-            courseRepository.saveAndFlush(course);
-        } catch (OptimisticLockException ex) {
-            throw new EntityLockEx(
-                    "Курс был изменен другим пользователем. Повторите попытку",
-                    String.format("Ошибка удаления пользователей из курса %s. OptimisticLockException", courseId)
-            );
-        }
+        List<User> usersToDelete = userService.findAllByIdList(userIdList);
+
+        usersToDelete.forEach(u -> {
+            if (courseCreator.getId().equals(u.getId())) {
+                throw new AccessDeniedEx(
+                        String.format("Ошибка. Вы не можете удалить создателя курса: %s", u.getId()),
+                        String.format("Ошибка удаления пользователей из курса %s. Пользователь %s пытается удалить " +
+                                "создателя курса", courseId, principal.getId())
+                );
+            } else if (!principal.getId().equals(courseCreator.getId()) &&
+                    principal.getRole().getPriorityValue() <= u.getRole().getPriorityValue()
+            ) {
+                throw new AccessDeniedEx(
+                        String.format("Ошибка. Вы не можете удалить пользователя с равной или более привилегированной ролью. Ваша роль -" +
+                                        "%s. Роль пользователя %s, которого вы хотите удалить - %s", principal.getRole().name(),
+                                u.getId(), u.getRole().name()),
+                        String.format("Ошибка удаления пользователей из курса %s. Пользователь %s пытается удалить " +
+                                "пользователя %s с равной или более привилегированной ролью", courseId, principal.getId(), u.getId())
+                );
+            }
+        });
+
+        courseUserRepository.deleteAllByCourseIdAndUserIdIn(courseId, userIdList);
     }
 
     public CourseResponseDto getCourseInfoById(User principal, UUID courseId) {
@@ -399,6 +469,7 @@ public class CourseService {
 
         List<CourseUser> courseUsers = courseUserRepository.findAllByCourseId(courseId);
         List<User> users = courseUsers.stream()
+                .filter(cu -> !cu.isCreator())
                 .map(CourseUser::getUser)
                 .toList();
 
@@ -428,6 +499,7 @@ public class CourseService {
                             courseUserRepository.findCourseCreatorByCourseId(c.getId()).orElse(null),
                             courseUserRepository.findAllByCourseId(c.getId())
                                     .stream()
+                                    .filter(cu -> !cu.isCreator())
                                     .map(CourseUser::getUser)
                                     .toList()
                     );
@@ -440,8 +512,14 @@ public class CourseService {
                 .toList();
     }
 
-    public List<CourseShortResponseDto> findCoursesByUserId(User principal, UUID userId) {
-        List<Course> courses = courseUserRepository.findCoursesByUserId(userId);
+    public List<CourseShortResponseDto> findCoursesByUserId(User principal, UUID userId, Boolean isCreator) {
+        List<Course> courses = List.of();
+
+        if(isCreator != null){
+            courses = courseUserRepository.findCoursesByUserIdAndIsCreator(userId, isCreator);
+        } else{
+            courses = courseUserRepository.findCoursesByUserId(userId);
+        }
 
         return courses.stream()
                 .map(c -> DtoFactory.makeCourseShortResponseDto(
@@ -456,7 +534,8 @@ public class CourseService {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Данного курса не существует",
-                        String.format("Ошибка при загрузке файлов в курс. Курса с id %s не существует", courseId)
+                        String.format("Ошибка при загрузке файлов в курс пользователем %s. Курса с id %s не существует",
+                                principal.getId(), courseId)
                 ));
 
         UUID courseMaterialId = UUID.randomUUID();
@@ -501,10 +580,8 @@ public class CourseService {
                 .user(principal)
                 .build();
 
-        course.addCourseMaterial(courseMaterial);
-
         try {
-            courseRepository.saveAndFlush(course);
+            courseMaterialRepository.saveAndFlush(courseMaterial);
         } catch (DataIntegrityViolationException ex) {
             Throwable root = NestedExceptionUtils.getRootCause(ex);
             String message;
@@ -513,31 +590,27 @@ public class CourseService {
             if (root instanceof SQLException sqlEx && sqlEx.getMessage().toLowerCase().contains("unique") &&
                     sqlEx.getMessage().toLowerCase().contains("course_id_topic")) {
                 message = "Ошибка. В данном курсе уже существует учебный материал с таким названием";
-                debugMessage = String.format("Ошибка при добавлении учебного материала. " +
-                        "В курсе %s уже существует учебный материал с названием %s", course.getId(), request.getTopic());
+                debugMessage = String.format("Ошибка при создании курса. " +
+                                "В курсе %s уже существует учебный материал с названием %s", courseId,
+                        request.getTopic());
             } else {
                 message = "Нарушены ограничения целостности данных. Возможно, вы пытаетесь добавить некорректные или уже существующие данные";
                 debugMessage = (root != null ? root.getMessage() : ex.getMessage());
             }
 
             throw new DBConstraintViolationEx(message, debugMessage);
-        } catch (OptimisticLockException ex) {
-            throw new EntityLockEx(
-                    "Ошибка. Курс бы изменен другим пользователем. Повторите попытку",
-                    String.format("Ошибка при добавлении учебного материала в курс пользователем %s. Курс %s был " +
-                            "изменен другим пользователем", principal.getId(), course.getId())
+        }
+
+        try {
+            fileService.uploadFiles(contentInfoList);
+        } catch (IllegalArgumentEx ex) {
+            throw new EmptyFileEx(
+                    "Ошибка. Вы пытаетесь загрузить пустой файл",
+                    String.format("Ошибка при добавлении учебного материала пользователем %s. Попытка загрузить пустой" +
+                            " файл", principal.getId())
             );
         }
 
-        fileService.uploadFiles(contentInfoList);
-
-        sendCourseMaterialUploadedNotification(courseId, courseMaterial);
-
-        return DtoFactory.makeCourseMaterialResponseDto(courseMaterial);
-    }
-
-    @Async
-    private void sendCourseMaterialUploadedNotification(UUID courseId, CourseMaterial material) {
         List<User> usersInCourse = courseRepository.findByIdWithCourseUsers(courseId)
                 .map(c -> c.getCourseUsers()
                         .stream()
@@ -545,11 +618,13 @@ public class CourseService {
                         .toList())
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Такого курса не существует",
-                        String.format("Ошибка отправки уведомлений о загрузке учебного материала. Курса с id %s не " +
-                                "существует", courseId)
+                        String.format("Ошибка при добавлении учебного материала пользователем %s. Курса с id %s не " +
+                                "существует", principal.getId(), courseId)
                 ));
 
-        usersInCourse.forEach(u -> courseEmailService.sendCourseMaterialUploadedNotification(u, material));
+        usersInCourse.forEach(u -> courseEmailService.sendCourseMaterialUploadedNotification(u, courseMaterial));
+
+        return DtoFactory.makeCourseMaterialResponseDto(courseMaterial);
     }
 
     public Optional<CourseMaterial> findCourseMaterialById(UUID id) {
@@ -562,15 +637,20 @@ public class CourseService {
             courseMaterialRepository.delete(courseMaterial);
         } catch (OptimisticLockException ex) {
             throw new EntityLockEx(
-                    "Курс был изменен другим пользователем. Повторите попытку",
+                    "Учебный материал был изменен другим пользователем. Повторите попытку",
                     String.format("Ошибка при удалении учебного материала пользователем %s. Учебный материал %s был " +
                             "удален другим пользователем", principal.getId(), courseMaterial.getId())
             );
         }
 
-        String pathStr = content.get(0).getPath();
-        Path filePath = Paths.get(pathStr);
-        Path dirPath = filePath.getParent();
+        Path dirPath;
+        if(!content.isEmpty()) {
+            String pathStr = content.get(0).getPath();
+            Path filePath = Paths.get(pathStr);
+            dirPath = filePath.getParent();
+        } else{
+            dirPath = fileService.generateCourseMaterialCataloguePath(courseMaterial.getCourse().getId(), courseMaterial.getId());
+        }
 
         fileService.deleteDirectory(dirPath);
     }
@@ -579,14 +659,14 @@ public class CourseService {
     public CourseMaterialResponseDto updateCourseMaterial(
             User principal, CourseMaterial courseMaterial, CourseMaterialUpdateRequestDto request
     ) {
-        boolean isCourseUpdated = false;
+        boolean isCourseMaterialUpdated = false;
         List<FileService.FileInfo> filesToWriteList = new ArrayList<>();
         List<Path> pathToDeleteList = new ArrayList<>();
 
         String newTopic = request.getNewTopic();
         if (newTopic != null && !newTopic.isBlank()) {
             courseMaterial.setTopic(newTopic);
-            isCourseUpdated = true;
+            isCourseMaterialUpdated = true;
         }
 
         // удалить файлы
@@ -604,7 +684,7 @@ public class CourseService {
                     })
                     .collect(Collectors.toCollection(ArrayList::new));
             courseMaterial.setContent(content);
-            isCourseUpdated = true;
+            isCourseMaterialUpdated = true;
         }
 
         if (request.getContent() != null && !request.getContent().isEmpty()) {
@@ -622,31 +702,6 @@ public class CourseService {
                     }
                 }
             });
-
-            if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(
-                    courseMaterial.getCourse().getId(), newContent.size() - pathToDeleteList.size()
-                    )) {
-                throw new TaskAndCourseMaterialFileLimitForCourseExceededEx(
-                        String.format("Ошибка при загрузке файлов. Превышено максимально " +
-                                        "допустимое число файлов для этого курса - %s",
-                                maxTaskAndMaterialFileAmountForCourse
-                        ),
-                        String.format("Ошибка при загрузке файлов. " +
-                                        "Превышено максимально допустимое количество учебных файлов для курса с %s id",
-                                courseMaterial.getCourse().getId()
-                        )
-                );
-            } else if (courseLimitCounter.isFileAmountForCourseMaterialExceedsLimit(
-                    courseMaterial.getCourse().getId(), courseMaterial.getId(), newContent.size() - pathToDeleteList.size()
-            )) {
-                throw new CourseMaterialFileLimitExceededEx(
-                        String.format("Ошибка при загрузке файлов. Превышено максимально допустимое число файлов" +
-                                " в рамках одного учебного материала - %d", maxFileAmountForCourseMaterial),
-                        String.format("Ошибка при загрузке файлов пользователем %s в курс %s. " +
-                                        "Превышено максимально допустимое число файлов в рамках одного учебного материала",
-                                principal.getId(), courseMaterial.getCourse().getId())
-                );
-            }
 
             List<FileService.FileInfo> contentInfoList = newContent.stream()
                     .map(f -> {
@@ -672,24 +727,83 @@ public class CourseService {
                     .collect(Collectors.toCollection(ArrayList::new));
 
             courseMaterial.addCourseMaterialContent(courseMaterialContent);
-            isCourseUpdated = true;
+            isCourseMaterialUpdated = true;
         }
 
-        if (isCourseUpdated) {
+        if(courseMaterial.getContent() == null || courseMaterial.getContent().isEmpty()){
+            throw new CourseMaterialEmptyEx(
+                    "Ошибка. Учебный материал обязательно должен содержать файлы",
+                    String.format("Ошибка обновления учебного материала %s пользователем %s. Пустой учебный материал",
+                            courseMaterial.getId(), principal.getId())
+            );
+        }
+
+        if (isCourseMaterialUpdated) {
             courseMaterial.setLastChangedAt(LocalDateTime.now());
 
             try {
                 courseMaterialRepository.saveAndFlush(courseMaterial);
             } catch (OptimisticLockException ex) {
                 throw new EntityLockEx(
-                        "Курс был изменен другим пользователем. Повторите попытку",
+                        "Учебный материал был изменен другим пользователем. Повторите попытку",
                         String.format("Ошибка при обновлении учебного материала %s пользователем %s. Материал был " +
                                 "изменен другим пользователем", courseMaterial.getId(), principal.getId())
                 );
+            } catch (DataIntegrityViolationException ex) {
+                Throwable root = NestedExceptionUtils.getRootCause(ex);
+                String message;
+                String debugMessage;
+
+                if (root instanceof SQLException sqlEx && sqlEx.getMessage().toLowerCase().contains("unique") &&
+                        sqlEx.getMessage().toLowerCase().contains("course_id_topic")) {
+                    message = "Ошибка. В данном курсе уже существует учебный материал с таким названием";
+                    debugMessage = String.format("Ошибка при обновлении учебного материала. " +
+                                    "В курсе %s уже существует учебный материал с названием %s",
+                            courseMaterial.getCourse().getId(), request.getNewTopic());
+                } else {
+                    message = "Нарушены ограничения целостности данных. Возможно, вы пытаетесь добавить некорректные или уже существующие данные";
+                    debugMessage = (root != null ? root.getMessage() : ex.getMessage());
+                }
+
+                throw new DBConstraintViolationEx(message, debugMessage);
             }
 
             pathToDeleteList.forEach(fileService::deleteFile);
-            fileService.uploadFiles(filesToWriteList);
+
+            if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(
+                    courseMaterial.getCourse().getId(), filesToWriteList.size()
+            )) {
+                throw new TaskAndCourseMaterialFileLimitForCourseExceededEx(
+                        String.format("Ошибка при загрузке файлов. Превышено максимально " +
+                                        "допустимое число файлов для этого курса - %s",
+                                maxTaskAndMaterialFileAmountForCourse
+                        ),
+                        String.format("Ошибка при загрузке файлов. " +
+                                        "Превышено максимально допустимое количество учебных файлов для курса с %s id",
+                                courseMaterial.getCourse().getId()
+                        )
+                );
+            } else if (courseLimitCounter.isFileAmountForCourseMaterialExceedsLimit(
+                    courseMaterial.getCourse().getId(), courseMaterial.getId(), filesToWriteList.size()
+            )) {
+                throw new CourseMaterialFileLimitExceededEx(
+                        String.format("Ошибка при загрузке файлов. Превышено максимально допустимое число файлов" +
+                                " в рамках одного учебного материала - %d", maxFileAmountForCourseMaterial),
+                        String.format("Ошибка при загрузке файлов пользователем %s в курс %s. " +
+                                        "Превышено максимально допустимое число файлов в рамках одного учебного материала",
+                                principal.getId(), courseMaterial.getCourse().getId())
+                );
+            }
+
+            try {
+                fileService.uploadFiles(filesToWriteList);
+            } catch (IllegalArgumentException ex){
+                throw new EmptyFileEx(
+                        "Ошибка. Вы пытаетесь загрузить пустой файл",
+                        String.format("Ошибка при обновлении учебного материала %s. Пользователь %s пытается " +
+                                "загрузить пустой файл", courseMaterial.getId(), principal.getId())
+                );
+            }
         }
 
         return DtoFactory.makeCourseMaterialResponseDto(courseMaterial);
@@ -724,19 +838,13 @@ public class CourseService {
                 .toList();
     }
 
-    public Resource getCourseMaterialFile(String path) {
+    public Resource getCourseMaterialFile(String path) throws MalformedURLException {
         Path absPath = Paths.get(basePath).resolve(path);
-
-        try {
-            Resource resource = new UrlResource(absPath.toUri());
-            if (!resource.exists() || !resource.isReadable()) {
-                throw new IllegalArgumentException("Файл не найден");
-            }
-
-            return resource;
-        } catch (MalformedURLException ex) {
-            throw new IllegalArgumentException("Ошибка на сервере");
+        Resource resource = new FileSystemResource(absPath);
+        if (!resource.exists() || !resource.isReadable()) {
+            throw new IllegalArgumentException("Файл не найден");
         }
+        return resource;
     }
 
     public String resolveContentType(String fileName) {

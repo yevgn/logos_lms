@@ -225,8 +225,9 @@ public class AuthController {
 
     })
     @PostMapping("/reset-password")
-    public ResponseEntity<AuthResponseDto> resetPassword(@Valid @RequestBody ResetPasswordRequestDto request) {
-        return ResponseEntity.ok(authService.resetPassword(request));
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequestDto request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok().build();
     }
 
     @Operation(summary = "Отправка сообщения на эл. почту пользователя для сброса 2FA secret")
@@ -319,13 +320,13 @@ public class AuthController {
     }
     )
     @PostMapping("/reset-tfa")
-    public ResponseEntity<AuthResponseDto> resetTfa(
+    public ResponseEntity<?> resetTfa(
             @RequestParam("user_email") String email,
             @RequestParam("reset-fta-token") String token
     ) {
-        return ResponseEntity.ok(authService.resetTfa(email, token));
+        authService.resetTfa(email, token);
+        return ResponseEntity.ok().build();
     }
-
 
     @Operation(summary = "Включение двухфакторной аутентификации", security = @SecurityRequirement(name = "bearerAuth"))
     @Tag(name = "Аутентификация. Управление токенами, сессиями")
@@ -494,12 +495,12 @@ public class AuthController {
     }
     )
     @PostMapping("/activate-account")
-    public ResponseEntity<String> activateAccount(
-            @RequestParam("account_activation_token") String accountActivationToken,
+    public ResponseEntity<?> activateAccount(
+            @RequestParam("token") String accountActivationToken,
             @RequestParam("user_email") String userEmail
     ){
 
         authService.activateAccount(accountActivationToken, userEmail);
-        return ResponseEntity.ok("Вы успешно активировали свой аккаунт!");
+        return ResponseEntity.ok().build();
     }
 }

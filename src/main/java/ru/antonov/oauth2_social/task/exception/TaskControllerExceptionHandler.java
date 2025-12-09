@@ -33,4 +33,15 @@ public class TaskControllerExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(TaskCommentAmountLimitExceededEx.class)
+    public ResponseEntity<ApiError> handleTaskCommentAmountLimitExceededEx(TaskCommentAmountLimitExceededEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
 }

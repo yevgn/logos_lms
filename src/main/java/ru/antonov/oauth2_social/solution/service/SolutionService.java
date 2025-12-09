@@ -1,7 +1,6 @@
 package ru.antonov.oauth2_social.solution.service;
 
 import jakarta.persistence.OptimisticLockException;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -17,14 +16,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.common.FileService;
+import ru.antonov.oauth2_social.common.exception.*;
 import ru.antonov.oauth2_social.course.service.CourseLimitCounter;
-import ru.antonov.oauth2_social.course.service.CourseService;
 import ru.antonov.oauth2_social.solution.common.SortBy;
 import ru.antonov.oauth2_social.solution.repository.SolutionRepository;
-import ru.antonov.oauth2_social.exception.DBConstraintViolationEx;
-import ru.antonov.oauth2_social.exception.EntityLockEx;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
-import ru.antonov.oauth2_social.exception.FileDuplicatedEx;
 import ru.antonov.oauth2_social.solution.dto.*;
 import ru.antonov.oauth2_social.solution.entity.Solution;
 import ru.antonov.oauth2_social.solution.entity.SolutionStatus;
@@ -73,7 +68,7 @@ public class SolutionService {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         String.format("Ошибка. Задания с id %s не существует", taskId),
                         String.format("Ошибка при загрузке решения пользователем %s. " +
-                                "Задания с id %s не существует", principal.getEmail(), taskId)
+                                "Задания с id %s не существует", principal.getId(), taskId)
                 ));
 
         List<MultipartFile> files = request.getContent();
@@ -83,8 +78,9 @@ public class SolutionService {
             throw new SolutionFileLimitForCourseExceededEx(
                     "Ошибка при загрузке файлов. Превышено максимально допустимое число файлов с решениями " +
                             "для этого курса",
-                    String.format("Ошибка при загрузке файлов. " +
-                            "Превышено максимально допустимое количество файлов с решениями для курса с %s id", courseId)
+                    String.format("Ошибка при загрузке файлов пользователем %s. " +
+                                    "Превышено максимально допустимое количество файлов с решениями для курса с %s id",
+                            principal.getId(), courseId)
             );
         }
 
@@ -139,36 +135,38 @@ public class SolutionService {
             throw new DBConstraintViolationEx(message, debugMessage);
         }
 
-        fileService.uploadFiles(contentInfoList);
+        Path solutionCataloguePath = Paths.get(
+                basePath, task.getCourse().getId().toString(), "tasks", task.getId().toString(), "solutions",
+                solutionId.toString()
+        );
 
-//        List<User> courseUsers = courseService.findUsersByCourseId(courseId);
-//
-//        courseUsers.stream()
-//                .filter(u -> u.getRole() == Role.TUTOR)
-//                .forEach(u -> solutionEmailService.sendSolutionUploadedNotification(u, solution));
+        fileService.createDirectory(solutionCataloguePath);
+
+        fileService.uploadFiles(contentInfoList);
 
         return DtoFactory.makeSolutionResponseDto(solution);
     }
-
-    public void revokeSolution(User principal, UUID solutionId) {
-        Solution solution = solutionRepository.findById(solutionId)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        String.format("Ошибка. Решения с id %s не существует", solutionId),
-                        String.format("Ошибка при отзыве решения пользователем %s. " +
-                                "Решения с id %s не существует", principal.getEmail(), solutionId)
-                ));
-
-        solution.setSubmittedAt(null);
-        try {
-            solutionRepository.save(solution);
-        } catch (OptimisticLockException ex) {
-            throw new EntityLockEx(
-                    "Решение было изменено. Повторите попытку",
-                    String.format("Ошибка при обновлении решения пользователем %s. Решение %s было " +
-                            "изменено", principal.getId(), solutionId)
-            );
-        }
-    }
+//
+//    public void revokeSolution(User principal, UUID solutionId) {
+//        Solution solution = solutionRepository.findById(solutionId)
+//                .orElseThrow(() -> new EntityNotFoundEx(
+//                        String.format("Ошибка. Решения с id %s не существует", solutionId),
+//                        String.format("Ошибка при отзыве решения пользователем %s. " +
+//                                "Решения с id %s не существует", principal.getEmail(), solutionId)
+//                ));
+//
+//        solution.setSubmittedAt(null);
+//        solution.set
+//        try {
+//            solutionRepository.save(solution);
+//        } catch (OptimisticLockException ex) {
+//            throw new EntityLockEx(
+//                    "Решение было изменено. Повторите попытку",
+//                    String.format("Ошибка при обновлении решения пользователем %s. Решение %s было " +
+//                            "изменено", principal.getId(), solutionId)
+//            );
+//        }
+//    }
 
     @Transactional(rollbackFor = Exception.class)
     public SolutionResponseDto updateSolution(User principal, UUID solutionId, SolutionUpdateRequestDto request) {
@@ -176,7 +174,7 @@ public class SolutionService {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         String.format("Ошибка. Решения с id %s не существует", solutionId),
                         String.format("Ошибка при обновлении решения пользователем %s. " +
-                                "Решения с id %s не существует", principal.getEmail(), solutionId)
+                                "Решения с id %s не существует", principal.getId(), solutionId)
                 ));
 
         boolean isSolutionUpdated = false;
@@ -207,7 +205,7 @@ public class SolutionService {
                 for (Content content : solution.getContent()) {
                     if (content.getOriginalFileName().equals(c.getOriginalFilename())) {
                         throw new FileDuplicatedEx(
-                                String.format("Файл с именем %s уже существует в этом задании",
+                                String.format("Файл с именем %s уже существует в этом решении",
                                         c.getOriginalFilename()),
                                 String.format("Ошибка при обновлении решения %s. Пользователь %s пытается " +
                                                 "загрузить файл с именем %s, который уже существует",
@@ -284,7 +282,15 @@ public class SolutionService {
                 );
             }
 
-            fileService.uploadFiles(filesToWriteList);
+            try {
+                fileService.uploadFiles(filesToWriteList);
+            } catch (IllegalArgumentException ex){
+                throw new EmptyFileEx(
+                        "Ошибка. Вы пытаетесь загрузить пустой файл",
+                        String.format("Ошибка при обновлении решения %s. Пользователь %s пытается " +
+                                "загрузить пустой файл", solution.getId(), principal.getId())
+                );
+            }
         }
 
         return DtoFactory.makeSolutionResponseDto(solution);
@@ -334,17 +340,18 @@ public class SolutionService {
                                 "Решения с id %s не существует", principal.getEmail(), solutionId)
                 ));
 
-        if (solution.getStatus() == SolutionStatus.REVOKED) {
-            throw new AttemptToGetRevokedSolutionEx(
-                    "Ошибка доступа. У вас нет доступа к этому решению",
-                    String.format("Ошибка при оценке решения пользователем %s. Решение %s REVOKED",
-                            principal.getEmail(), solutionId)
-            );
-        } else if (solution.getStatus() == SolutionStatus.ACCEPTED || solution.getStatus() == SolutionStatus.RETURNED) {
+//        if (solution.getStatus() == SolutionStatus.REVOKED) {
+//            throw new AttemptToGetRevokedSolutionEx(
+//                    "Ошибка доступа. У вас нет доступа к этому решению",
+//                    String.format("Ошибка при оценке решения пользователем %s. Решение %s REVOKED",
+//                            principal.getEmail(), solutionId)
+//            );
+
+        if (solution.getStatus() == SolutionStatus.ACCEPTED || solution.getStatus() == SolutionStatus.RETURNED) {
             throw new SolutionAlreadyReviewedEx(
                     "Ошибка. Решение уже было проверено",
                     String.format("Ошибка при проверке решения пользователем %s. Решение %s уже было проверено",
-                            principal.getEmail(), solutionId)
+                            principal.getId(), solutionId)
             );
         }
 
@@ -356,7 +363,7 @@ public class SolutionService {
                     throw new SolutionReviewMarkMissingEx(
                             "Ошибка. Отсутствует балл",
                             String.format("Ошибка при проверке решения %s пользователем %s. Отсутствует балл",
-                                    solutionId, principal.getEmail())
+                                    solutionId, principal.getId())
                     );
                 }
                 solution.setMark(request.getMark());
@@ -384,16 +391,16 @@ public class SolutionService {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Такого решения не существует",
                         String.format("Ошибка при поиске решения пользователем %s. " +
-                                "Решения с id %s не существует", principal.getEmail(), solutionId)
+                                "Решения с id %s не существует", principal.getId(), solutionId)
                 ));
 
-        if (solution.getStatus() == SolutionStatus.REVOKED && !principal.equals(solution.getUser())) {
-            throw new AttemptToGetRevokedSolutionEx(
-                    "Ошибка доступа. Это решение было отозвано пользователем",
-                    String.format("Ошибка при поиске решения пользователем %s. Решение %s было отозвано",
-                            principal.getEmail(), solutionId)
-            );
-        }
+//        if (solution.getStatus() == SolutionStatus.REVOKED && !principal.equals(solution.getUser())) {
+//            throw new AttemptToGetRevokedSolutionEx(
+//                    "Ошибка доступа. Это решение было отозвано пользователем",
+//                    String.format("Ошибка при поиске решения пользователем %s. Решение %s было отозвано",
+//                            principal.getEmail(), solutionId)
+//            );
+//        }
 
         return DtoFactory.makeSolutionResponseDto(solution);
     }
@@ -403,16 +410,16 @@ public class SolutionService {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Заданный пользователь не загрузил решение к этому заданию",
                         String.format("Ошибка при поиске решения пользователем %s по заданию %s и пользователю %s. " +
-                                "Решения не существует", principal.getEmail(), taskId, userId)
+                                "Решения не существует", principal.getId(), taskId, userId)
                 ));
 
-        if (solution.getStatus() == SolutionStatus.REVOKED && !principal.equals(solution.getUser())) {
-            throw new AttemptToGetRevokedSolutionEx(
-                    "Ошибка доступа. Это решение было отозвано пользователем",
-                    String.format("Ошибка при поиске решения пользователем %s. Решение %s было отозвано",
-                            principal.getEmail(), solution.getId())
-            );
-        }
+//        if (solution.getStatus() == SolutionStatus.REVOKED && !principal.equals(solution.getUser())) {
+//            throw new AttemptToGetRevokedSolutionEx(
+//                    "Ошибка доступа. Это решение было отозвано пользователем",
+//                    String.format("Ошибка при поиске решения пользователем %s. Решение %s было отозвано",
+//                            principal.getEmail(), solution.getId())
+//            );
+//        }
 
         return DtoFactory.makeSolutionResponseDto(solution);
     }
@@ -428,20 +435,20 @@ public class SolutionService {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Такого задания не существует",
                         String.format("Ошибка при поиске решений пользователем %s по заданию %s. " +
-                                "Задания не существует", principal.getEmail(), taskId)
+                                "Задания не существует", principal.getId(), taskId)
                 ));
 
         Stream<SolutionWithUserShortResponseDto> resStream = task.getSolutions()
                 .stream()
-                .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+               // .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
                 .map(DtoFactory::makeSolutionWithUserShortResponseDto);
 
-        if(sortBy == SortBy.USER){
+        if (sortBy == SortBy.USER) {
             resStream = resStream.sorted(Comparator.comparing(
                     dto -> dto.getUser().getSurname(),
                     String::compareTo
             ));
-        } else if(sortBy == SortBy.SOLUTION_SUBMITTED_AT) {
+        } else if (sortBy == SortBy.SOLUTION_SUBMITTED_AT) {
             resStream = resStream.sorted(
                     Comparator.comparing(
                             SolutionWithUserShortResponseDto::getSubmittedAt,
@@ -460,7 +467,7 @@ public class SolutionService {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Такого задания не существует",
                         String.format("Ошибка при поиске решений пользователем %s по заданию %s. " +
-                                "Задания не существует", principal.getEmail(), taskId)
+                                "Задания не существует", principal.getId(), taskId)
                 ));
 
         Stream<SolutionWithUserShortResponseDto> resStream = task.getSolutions()
@@ -476,12 +483,12 @@ public class SolutionService {
                 })
                 .map(DtoFactory::makeSolutionWithUserShortResponseDto);
 
-        if(sortBy == SortBy.USER){
+        if (sortBy == SortBy.USER) {
             resStream = resStream.sorted(Comparator.comparing(
                     dto -> dto.getUser().getSurname(),
                     String::compareTo
             ));
-        } else if(sortBy == SortBy.SOLUTION_SUBMITTED_AT) {
+        } else if (sortBy == SortBy.SOLUTION_SUBMITTED_AT) {
             resStream = resStream.sorted(
                     Comparator.comparing(
                             SolutionWithUserShortResponseDto::getSubmittedAt,
@@ -498,18 +505,18 @@ public class SolutionService {
     ) {
         List<Solution> solutions = solutionRepository.findAllByCourseIdAndUserId(courseId, userId);
 
-        Stream<SolutionWithTaskShortResponseDto> resStream =  solutions.stream()
-                .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+        Stream<SolutionWithTaskShortResponseDto> resStream = solutions.stream()
+               // .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
                 .map(DtoFactory::makeSolutionWithTaskShortResponseDto);
 
-        if(sortBy == SortBy.TASK_PUBLISHED_AT){
+        if (sortBy == SortBy.TASK_PUBLISHED_AT) {
             resStream = resStream.sorted(
                     Comparator.comparing(
                             dto -> dto.getTask().getPublishedAt(),
                             LocalDateTime::compareTo
                     )
             );
-        } else if(sortBy == SortBy.SOLUTION_SUBMITTED_AT){
+        } else if (sortBy == SortBy.SOLUTION_SUBMITTED_AT) {
             resStream = resStream.sorted(
                     Comparator.comparing(
                             SolutionWithTaskShortResponseDto::getSubmittedAt,
@@ -539,14 +546,14 @@ public class SolutionService {
                 )
                 .map(DtoFactory::makeSolutionWithTaskShortResponseDto);
 
-        if(sortBy == SortBy.TASK_PUBLISHED_AT){
+        if (sortBy == SortBy.TASK_PUBLISHED_AT) {
             resStream = resStream.sorted(
                     Comparator.comparing(
                             dto -> dto.getTask().getPublishedAt(),
                             LocalDateTime::compareTo
                     )
             );
-        } else if(sortBy == SortBy.SOLUTION_SUBMITTED_AT){
+        } else if (sortBy == SortBy.SOLUTION_SUBMITTED_AT) {
             resStream = resStream.sorted(
                     Comparator.comparing(
                             SolutionWithTaskShortResponseDto::getSubmittedAt,
@@ -556,22 +563,21 @@ public class SolutionService {
         }
 
         return resStream.toList();
-
     }
 
-    @Transactional
+
     public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdGroupByTask(
             User principal, UUID courseId, SortBy sortBy) {
         List<Solution> solutions = solutionRepository.findAllByCourseId(courseId);
 
         Stream<SolutionsGroupByTaskShortResponseDto> resStream = solutions.stream()
-                .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+                //.filter(s -> s.getStatus() != SolutionStatus.REVOKED)
                 .collect(Collectors.groupingBy(Solution::getTask))
                 .entrySet()
                 .stream()
                 .map(e -> DtoFactory.makeSolutionsGroupByTaskShortResponseDto(e.getKey(), e.getValue()));
 
-        if(sortBy == SortBy.TASK_PUBLISHED_AT){
+        if (sortBy == SortBy.TASK_PUBLISHED_AT) {
             resStream = resStream.sorted(
                     Comparator.comparing(
                             dto -> dto.getTask().getPublishedAt(),
@@ -583,7 +589,6 @@ public class SolutionService {
         return resStream.toList();
     }
 
-    @Transactional
     public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdGroupByTask(
             User principal, UUID courseId, SortBy sortBy, boolean isNeedUnreviewed
     ) {
@@ -605,7 +610,7 @@ public class SolutionService {
                 .stream()
                 .map(e -> DtoFactory.makeSolutionsGroupByTaskShortResponseDto(e.getKey(), e.getValue()));
 
-        if(sortBy == SortBy.TASK_PUBLISHED_AT){
+        if (sortBy == SortBy.TASK_PUBLISHED_AT) {
             resStream = resStream.sorted(
                     Comparator.comparing(
                             dto -> dto.getTask().getPublishedAt(),
@@ -641,107 +646,5 @@ public class SolutionService {
         return contentType;
     }
 
-    public void saveComment(User principal, UUID solutionId, SolutionCommentCreateRequestDto request) {
-        Solution solution = solutionRepository.findById(solutionId)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Ошибка. Такого решения не существует",
-                        String.format("Ошибка при загрузке комментария к решению пользователем %s. " +
-                                "Решения %s не существует", principal.getEmail(), solutionId)
-                ));
 
-        if(solution.getStatus() == SolutionStatus.REVOKED){
-            throw new AttemptToGetRevokedSolutionEx(
-                    "Ошибка доступа. Это решение было отозвано пользователем",
-                    String.format("Ошибка при добавлении комментария пользователем %s. Решение %s было отозвано",
-                            principal.getEmail(), solution.getId())
-            );
-        }
-
-        if (courseLimitCounter.isCommentAmountForSolutionExceedsLimit(solutionId, 1)) {
-            throw new SolutionCommentAmountLimitExceededEx(
-                    String.format("Ошибка. Превышено максимальное число комментариев для решения - %s",
-                            maxCommentAmountForSolution),
-                    String.format("Ошибка добавления комментария к решению %s пользователем %s. Превышен лимит",
-                            solutionId, principal.getId())
-            );
-        }
-
-        Solution.SolutionComment comment = Solution.SolutionComment.builder()
-                .id(UUID.randomUUID())
-                .userId(principal.getId())
-                .text(request.getText())
-                .publishedAt(LocalDateTime.now())
-                .build();
-
-        solution.addComments(List.of(comment));
-
-        try {
-            solutionRepository.save(solution);
-        } catch (OptimisticLockException ex) {
-            throw new EntityLockEx(
-                    "Ошибка. Решение было изменено. Повторите попытку",
-                    String.format("Ошибка при добавлении комментария к решению %s пользователем %s. Решение было " +
-                            "изменено другим пользователем", solution.getId(), principal.getId())
-            );
-        }
-    }
-
-    public void deleteComment(User principal, UUID solutionId, UUID commentId) {
-        Solution solution = solutionRepository.findById(solutionId)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Ошибка. Такого решения не существует",
-                        String.format("Ошибка при удалении комментария к решению пользователем %s. " +
-                                "Решения %s не существует", principal.getEmail(), solutionId)
-                ));
-
-        if(solution.getStatus() == SolutionStatus.REVOKED){
-            throw new AttemptToGetRevokedSolutionEx(
-                    "Ошибка доступа. Это решение было отозвано пользователем",
-                    String.format("Ошибка при добавлении комментария пользователем %s. Решение %s было отозвано",
-                            principal.getEmail(), solution.getId())
-            );
-        }
-
-        List<Solution.SolutionComment> comments = solution.getComments();
-
-        solution.setComments(
-                comments.
-                        stream()
-                        .filter(s -> !s.getId().equals(commentId))
-                        .toList()
-        );
-
-        try {
-            solutionRepository.save(solution);
-        } catch (OptimisticLockException ex) {
-            throw new EntityLockEx(
-                    "Ошибка. Решение было изменено. Повторите попытку",
-                    String.format("Ошибка при удалении комментария к решению %s пользователем %s. Решение было " +
-                            "изменено другим пользователем", solution.getId(), principal.getId())
-            );
-        }
-    }
-
-    public List<SolutionCommentResponseDto> findCommentsBySolutionId(User principal, UUID solutionId) {
-        Solution solution = solutionRepository.findById(solutionId)
-                .orElseThrow(() -> new EntityNotFoundEx(
-                        "Ошибка. Такого решения не существует",
-                        String.format("Ошибка при поиске комментариев к решению пользователем %s. " +
-                                "Решения %s не существует", principal.getEmail(), solutionId)
-                ));
-
-        if(solution.getStatus() == SolutionStatus.REVOKED){
-            throw new AttemptToGetRevokedSolutionEx(
-                    "Ошибка доступа. Это решение было отозвано пользователем",
-                    String.format("Ошибка при добавлении комментария пользователем %s. Решение %s было отозвано",
-                            principal.getEmail(), solution.getId())
-            );
-        }
-
-        return solution.getComments().stream().map(c -> {
-                    User author = userService.findById(c.getUserId()).orElse(null);
-                    return DtoFactory.makeSolutionCommentResponseDto(c, author);
-                })
-                .toList();
-    }
 }

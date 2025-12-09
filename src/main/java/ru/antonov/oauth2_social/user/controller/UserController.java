@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
 
 import org.passay.CharacterRule;
@@ -36,14 +36,14 @@ import ru.antonov.oauth2_social.user.entity.EntityFactory;
 import ru.antonov.oauth2_social.user.entity.Group;
 import ru.antonov.oauth2_social.user.entity.Role;
 import ru.antonov.oauth2_social.user.entity.User;
-import ru.antonov.oauth2_social.exception.EmptyFileEx;
+import ru.antonov.oauth2_social.common.exception.EmptyFileEx;
 import ru.antonov.oauth2_social.user.service.GroupService;
 import ru.antonov.oauth2_social.user.service.InstitutionService;
 import ru.antonov.oauth2_social.user.service.PasswordGenerator;
 import ru.antonov.oauth2_social.user.service.UserService;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
+import ru.antonov.oauth2_social.common.exception.EntityNotFoundEx;
 
-import ru.antonov.oauth2_social.exception.AccessDeniedEx;
+import ru.antonov.oauth2_social.common.exception.AccessDeniedEx;
 
 import java.util.List;
 import java.util.Objects;
@@ -133,12 +133,12 @@ public class UserController {
             throw new EmptyFileEx(
                     "Вы пытаетесь загрузить пустой файл.",
                     String.format("Ошибка при добавлении списка пользоваетелей. Пользователь %s попытался загрузить пустой файл %s",
-                            principal.getEmail(), file.getOriginalFilename()
+                            principal.getId(), file.getOriginalFilename()
                     )
             );
         }
 
-        List<User> addedUsers = userService.saveAllCSV(file, principal.getInstitution().getId(), null);
+        List<User> addedUsers = userService.saveAllCSV(file, principal.getInstitution(), null);
         addedUsers.forEach(this::sendMailForAccountActivation);
 
         return ResponseEntity.ok(
@@ -222,12 +222,12 @@ public class UserController {
             throw new EmptyFileEx(
                     "Вы пытаетесь загрузить пустой файл.",
                     String.format("Ошибка при добавлении списка пользоваетелей. Пользователь %s попытался загрузить пустой файл %s",
-                            principal.getEmail(), file.getOriginalFilename()
+                            principal.getId(), file.getOriginalFilename()
                     )
             );
         }
 
-        List<User> addedUsers = userService.saveAllCSV(file, principal.getInstitution().getId(), groupId);
+        List<User> addedUsers = userService.saveAllCSV(file, principal.getInstitution(), groupId);
         addedUsers.forEach(this::sendMailForAccountActivation);
 
         return ResponseEntity.ok(
@@ -299,9 +299,10 @@ public class UserController {
         } else {
             Group group = groupService.findByInstitutionIdAndName(principal.getInstitution().getId(), request.getGroupName())
                     .orElseThrow(() -> new EntityNotFoundEx(
-                            "Группы с указанным названием не существует",
-                            String.format("Неудача при поиске группы. Группа с названием %s в учебном заведении %s не" +
-                                    " существует", request.getGroupName(), principal.getInstitution().getId())
+                            "Ошибка. Группы с указанным названием не существует",
+                            String.format("Неудача при добавлении пользователя пользователем %s. " +
+                                    "Группа с названием %s в учебном заведении %s не существует", principal.getId(),
+                                    request.getGroupName(), principal.getInstitution().getId())
                     ));
 
             user = EntityFactory.makeUserEntity(
@@ -368,6 +369,7 @@ public class UserController {
     @PostMapping("/batch")
     public ResponseEntity<List<UserResponseDto>> addUsersBatch(
             @AuthenticationPrincipal User principal,
+            @NotEmpty(message = "Тело запроса не должно быть пустым")
             @Valid @RequestBody List<UserCreateRequestDto> requestList
     ) {
         checkPrincipalIsAttachedToInstitutionOrElseThrow(principal);
@@ -384,10 +386,12 @@ public class UserController {
                             } else {
                                 Group group = groupService.findByInstitutionIdAndName(principal.getInstitution().getId(), dto.getGroupName())
                                         .orElseThrow(() -> new EntityNotFoundEx(
-                                                String.format("Группы %s в данном учебном заведение не существует", dto.getGroupName()),
-                                                String.format("Ошибка при добавлении списка пользователей. " +
-                                                                "Группы %s в учебном заведении %s не существует",
-                                                        dto.getGroupName(), principal.getInstitution().getId())
+                                                String.format("Группы %s в данном учебном заведени не существует",
+                                                        dto.getGroupName()),
+                                                String.format("Неудача при добавлении пользователя пользователем %s. " +
+                                                                "Группа с названием %s в учебном заведении %s не существует",
+                                                        principal.getId(), dto.getGroupName(),
+                                                        principal.getInstitution().getId())
                                         ));
                                 return EntityFactory.makeUserEntity(
                                         dto,
@@ -445,12 +449,13 @@ public class UserController {
     @GetMapping("/id")
     public ResponseEntity<UserResponseDto> findUserById(
             @AuthenticationPrincipal User principal,
-            @Valid @NotNull(message = "поле user_id не может отсутствовать") @RequestParam("user_id") UUID userId
+            @RequestParam("user_id") UUID userId
     ) {
         User user = userService.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         String.format("Пользователя с %s id не существует", userId),
-                        String.format("Ошибка при поиске пользователя. Пользователя с %s id не существует", userId)
+                        String.format("Ошибка при поиске пользователя пользователем %s" +
+                                "Пользователя с %s id не существует", principal.getId(), userId)
                 ));
 
         checkUserHasAccessToOtherOrElseThrow(principal, user, true, true);
@@ -502,8 +507,9 @@ public class UserController {
     ) {
         User user = userService.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundEx(
-                        String.format("Пользователя с %s email не существует", email),
-                        String.format("Ошибка при поиске пользователя. Пользователя с email %s не существует", email)
+                        String.format("Ошибка. Пользователя с %s email не существует", email),
+                        String.format("Ошибка при поиске пользователя пользователем %s." +
+                                " Пользователя с email %s не существует", principal.getId(), email)
                 ));
 
         checkUserHasAccessToOtherOrElseThrow(principal, user, true, true);

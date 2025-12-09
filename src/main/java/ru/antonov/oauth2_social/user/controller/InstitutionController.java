@@ -14,7 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import ru.antonov.oauth2_social.config.AccessManager;
-import ru.antonov.oauth2_social.exception.AccessDeniedEx;
+import ru.antonov.oauth2_social.common.exception.AccessDeniedEx;
 import ru.antonov.oauth2_social.user.dto.DtoFactory;
 import ru.antonov.oauth2_social.user.dto.InstitutionCreateRequestDto;
 import ru.antonov.oauth2_social.user.dto.InstitutionResponseDto;
@@ -160,54 +160,54 @@ public class InstitutionController {
         );
     }
 
-    @Operation(
-            summary = "Получение информации о пользователях по id учебного заведения и группе",
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @Tag(name = "Управление пользователями")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
-            @ApiResponse(responseCode = "403",
-                    description = "Нет доступа",
-                    content = @Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "403",
-                                          "message": "Ошибка доступа. Вы не имеете доступа к этому учебному заведению"
-                                        }
-                                    """)
-                    )),
-            @ApiResponse(responseCode = "400",
-                    description = "Некорректные  данные или они отсутствуют",
-                    content = @Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "400",
-                                          "message": "параметр institution_id отсутствует"
-                                        }
-                                    """)
-                    ))
-    }
-    )
-    @GetMapping("/{institutionId}/group/{groupId}/users")
-    public ResponseEntity<List<UserShortResponseDto>> findUsersByInstitutionIdAndGroup(
-            @AuthenticationPrincipal User principal,
-            @PathVariable UUID institutionId,
-            @PathVariable String group
-    ) {
-        checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
-
-        List<User> users = userService.findAllByInstitutionIdAndGroup(institutionId, group);
-
-        return ResponseEntity.ok(
-                users.stream()
-                        .map(DtoFactory::makeUserShortResponseDto)
-                        .toList()
-        );
-    }
+//    @Operation(
+//            summary = "Получение информации о пользователях по id учебного заведения и группе",
+//            security = @SecurityRequirement(name = "bearerAuth")
+//    )
+//    @Tag(name = "Управление пользователями")
+//    @ApiResponses(value = {
+//            @ApiResponse(responseCode = "200"),
+//            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @Content),
+//            @ApiResponse(responseCode = "403",
+//                    description = "Нет доступа",
+//                    content = @Content(
+//                            mediaType = "application/json",
+//                            examples = @ExampleObject(value = """
+//                                        {
+//                                          "status" : "403",
+//                                          "message": "Ошибка доступа. Вы не имеете доступа к этому учебному заведению"
+//                                        }
+//                                    """)
+//                    )),
+//            @ApiResponse(responseCode = "400",
+//                    description = "Некорректные  данные или они отсутствуют",
+//                    content = @Content(
+//                            mediaType = "application/json",
+//                            examples = @ExampleObject(value = """
+//                                        {
+//                                          "status" : "400",
+//                                          "message": "параметр institution_id отсутствует"
+//                                        }
+//                                    """)
+//                    ))
+//    }
+//    )
+//    @GetMapping("/{institutionId}/group-name/{groupName}/users")
+//    public ResponseEntity<List<UserShortResponseDto>> findUsersByInstitutionIdAndGroup(
+//            @AuthenticationPrincipal User principal,
+//            @PathVariable UUID institutionId,
+//            @PathVariable String groupName
+//    ) {
+//        checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
+//
+//        List<User> users = userService.findAllByInstitutionIdAndGroup(institutionId, groupName);
+//
+//        return ResponseEntity.ok(
+//                users.stream()
+//                        .map(DtoFactory::makeUserShortResponseDto)
+//                        .toList()
+//        );
+//    }
 
     private void checkPrincipalIsNotAttachedToInstitutionOrElseThrow(User principal){
         if(principal.getInstitution() != null){

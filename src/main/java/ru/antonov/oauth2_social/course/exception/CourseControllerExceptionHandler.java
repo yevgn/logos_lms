@@ -26,6 +26,17 @@ public class CourseControllerExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(CourseMaterialEmptyEx.class)
+    public ResponseEntity<ApiError> handleCourseMaterialEmptyEx(CourseMaterialEmptyEx ex) {
+        log.warn(ex.getDebugMessage());
+        ApiError error = ApiError
+                .builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
 
     @ExceptionHandler(UserAmountForCourseLimitExceededEx.class)
     public ResponseEntity<ApiError> handleUserAmountForCourseLimitExceededEx(UserAmountForCourseLimitExceededEx ex) {

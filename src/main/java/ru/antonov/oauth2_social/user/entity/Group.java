@@ -34,8 +34,7 @@ public class Group {
 
     @OneToMany(
             mappedBy = "group",
-            cascade = {CascadeType.MERGE, CascadeType.REMOVE},
-            orphanRemoval = true
+            cascade = {CascadeType.MERGE}
     )
     private Set<User> users;
 

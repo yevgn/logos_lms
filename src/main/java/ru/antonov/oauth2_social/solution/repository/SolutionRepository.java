@@ -22,7 +22,8 @@ public interface SolutionRepository extends JpaRepository<Solution, UUID> {
             JOIN FETCH s.task t
             LEFT JOIN FETCH t.creator cr
             LEFT JOIN FETCH cr.institution
-            LEFT JOIN FETCH cr.group
+            LEFT JOIN FETCH cr.group gr
+            LEFT JOIN FETCH gr.institution
             JOIN FETCH t.course c
             JOIN FETCH c.institution
             WHERE c.id = :courseId AND s.user.id = :userId
@@ -34,7 +35,8 @@ public interface SolutionRepository extends JpaRepository<Solution, UUID> {
             JOIN FETCH s.task t
             LEFT JOIN FETCH t.creator cr
             LEFT JOIN FETCH cr.institution
-            LEFT JOIN FETCH cr.group
+            LEFT JOIN FETCH cr.group gr
+            LEFT JOIN FETCH gr.institution
             JOIN FETCH t.course c
             JOIN FETCH c.institution
             WHERE c.id = :courseId

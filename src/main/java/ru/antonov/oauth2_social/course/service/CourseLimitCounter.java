@@ -6,12 +6,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import ru.antonov.oauth2_social.course.repository.CourseUserRepository;
-import ru.antonov.oauth2_social.exception.FileNotFoundEx;
-import ru.antonov.oauth2_social.exception.IOEx;
-import ru.antonov.oauth2_social.solution.entity.Solution;
-import ru.antonov.oauth2_social.solution.repository.SolutionRepository;
-import ru.antonov.oauth2_social.task.entity.Task;
-import ru.antonov.oauth2_social.task.repository.TaskRepository;
+import ru.antonov.oauth2_social.common.exception.FileNotFoundEx;
+import ru.antonov.oauth2_social.common.exception.IOEx;
+import ru.antonov.oauth2_social.solution.repository.SolutionCommentRepository;
+import ru.antonov.oauth2_social.task.repository.TaskCommentRepository;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,7 +17,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -44,8 +41,8 @@ public class CourseLimitCounter {
     private String basePath;
 
     private final CourseUserRepository courseUserRepository;
-    private final SolutionRepository solutionRepository;
-    private final TaskRepository taskRepository;
+    private final TaskCommentRepository taskCommentRepository;
+    private final SolutionCommentRepository solutionCommentRepository;
 
     public boolean isTaskAndMaterialFileAmountForCourseExceedsLimit(UUID courseId, int fileAmountToUpload){
         return calculateTaskAndMaterialFileAmountForCourse(courseId) + fileAmountToUpload
@@ -61,22 +58,19 @@ public class CourseLimitCounter {
     }
 
     public boolean isCommentAmountForTaskExceedsLimit(UUID taskId, int commentAmountToAdd){
-        return calculateCommentAmountForTask(taskId) + commentAmountToAdd > maxCommentAmountForSolution;
+        return calculateCommentAmountForTask(taskId) + commentAmountToAdd > maxCommentAmountForTask;
     }
 
-
     private int calculateCommentAmountForSolution(UUID solutionId) {
-        Optional<Solution> solutionOpt = solutionRepository.findById(solutionId);
-        return solutionOpt.map(solution -> solution.getComments().size()).orElse(0);
+        return solutionCommentRepository.countAllBySolutionId(solutionId);
     }
 
     private int calculateCommentAmountForTask(UUID taskId) {
-        Optional<Task> taskOpt = taskRepository.findById(taskId);
-        return taskOpt.map(t -> t.getComments().size()).orElse(0);
+       return taskCommentRepository.countAllByTaskId(taskId);
     }
 
     public boolean isFileAmountForCourseMaterialExceedsLimit(UUID courseId, UUID courseMaterialId, int fileAmountToUpload){
-        Path courseBase = Paths.get(basePath, "courses", courseId.toString());
+        Path courseBase = Paths.get(basePath, courseId.toString());
         Path materialsDir = courseBase.resolve("course_materials");
         Path materialDir = materialsDir.resolve(courseMaterialId.toString());
 
@@ -86,7 +80,7 @@ public class CourseLimitCounter {
     }
 
     public boolean isFileAmountForTaskExceedsLimit(UUID courseId, UUID taskId, int fileAmountToUpload){
-        Path courseBase = Paths.get(basePath, "courses", courseId.toString());
+        Path courseBase = Paths.get(basePath, courseId.toString());
         Path tasksDir = courseBase.resolve("tasks");
         Path taskDir = tasksDir.resolve(taskId.toString());
 
@@ -96,7 +90,7 @@ public class CourseLimitCounter {
     }
 
     public boolean isFileAmountForSolutionExceedsLimit(UUID courseId, UUID taskId, UUID solutionId, int fileAmountToUpload){
-        Path courseBase = Paths.get(basePath, "courses", courseId.toString());
+        Path courseBase = Paths.get(basePath, courseId.toString());
         Path tasksDir = courseBase.resolve("tasks");
         Path taskDir = tasksDir.resolve(taskId.toString());
         Path solutionsDir = taskDir.resolve("solutions");
@@ -108,7 +102,7 @@ public class CourseLimitCounter {
     }
 
     public Long calculateTaskAndMaterialFileAmountForCourse(UUID courseId){
-        Path coursePath = Paths.get(basePath, "courses", String.valueOf(courseId));
+        Path coursePath = Paths.get(basePath, String.valueOf(courseId));
 
         if (!Files.exists(coursePath) || !Files.isDirectory(coursePath)) {
             throw new FileNotFoundEx(
@@ -132,17 +126,17 @@ public class CourseLimitCounter {
     }
 
     public Long calculateSolutionFileAmountForCourse(UUID courseId){
-        Path coursePath = Paths.get(basePath, "courses", String.valueOf(courseId), "tasks");
+        Path tasksPath = Paths.get(basePath, String.valueOf(courseId), "tasks");
 
-        if (!Files.exists(coursePath) || !Files.isDirectory(coursePath)) {
+        if (!Files.exists(tasksPath) || !Files.isDirectory(tasksPath)) {
             throw new FileNotFoundEx(
                     "Ошибка на сервере",
                     String.format("Ошибка при подсчете solution файлов для курса %s. Директории %s не существует",
-                            courseId, coursePath)
+                            courseId, tasksPath)
             );
         }
 
-        try (Stream<Path> paths = Files.walk(coursePath)) {
+        try (Stream<Path> paths = Files.walk(tasksPath)) {
             return paths
                     .filter(Files::isRegularFile) // Только файлы
                     .filter(path -> path.toString().contains(File.separator + "solutions" + File.separator))

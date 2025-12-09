@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
+import ru.antonov.oauth2_social.common.exception.EntityNotFoundEx;
 import ru.antonov.oauth2_social.user.dto.DtoFactory;
 import ru.antonov.oauth2_social.user.dto.InstitutionCreateRequestDto;
 import ru.antonov.oauth2_social.user.dto.InstitutionResponseDto;

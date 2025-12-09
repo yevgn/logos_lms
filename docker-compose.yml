@@ -22,6 +22,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/logos
       SPRING_DATASOURCE_USERNAME: myuser
       SPRING_DATASOURCE_PASSWORD: mypassword
+    volumes:
+      - lms_courses_data:/var/lib/logos-lms/courses
 
 volumes:
   postgres_data:
+  lms_courses_data:

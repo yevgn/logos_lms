@@ -5,12 +5,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
+import ru.antonov.oauth2_social.common.exception.EntityNotFoundEx;
 import ru.antonov.oauth2_social.user.dto.DtoFactory;
 import ru.antonov.oauth2_social.user.dto.GroupResponseDto;
 import ru.antonov.oauth2_social.user.entity.Group;
 import ru.antonov.oauth2_social.user.repository.GroupRepository;
-import ru.antonov.oauth2_social.exception.DBConstraintViolationEx;
+import ru.antonov.oauth2_social.common.exception.DBConstraintViolationEx;
 
 import java.sql.SQLException;
 import java.util.List;

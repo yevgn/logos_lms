@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url:   jdbc:postgresql://localhost:5432/logos
-    username: postgres
-    password:  root
+    url: jdbc:postgresql://localhost:5432/logos #${SPRING_DATASOURCE_URL}
+    username: postgres # ${SPRING_DATASOURCE_USERNAME}
+    password: root #${SPRING_DATASOURCE_PASSWORD} #root
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -26,13 +26,13 @@ spring:
       reset-password-token-expiration: 900000 # 15 минут
       inner-services-token:  eyJhbGciOiJIUzI1NiJ9.eyJyb2xlcyI6WyJTRVJWSUNFIl0sInN1YiI6ImlubmVyX3NlcnZpY2VAbXkuc2VydmljZSIsImlhdCI6MTc0ODUxNDQ2NSwiaXNzIjoiYXV0aC1zZXJ2aWNlIiwiZXhwIjoxNzgwMDUwNDY1fQ.sPPwcMq-5pqH48Mj3oxM9lv6eLMdiEgUDNq6HEk8sN4
     url:
-      reset-password: http://localhost:8081/front/logos-lms/api/v1/auth/reset-password
-      reset-2fa: http://localhost:8081/front/logos-lms/api/v1/auth/reset-2fa
-      activate-account: http://localhost:8080/front/logos-lms/api/v1/auth/activate-account
-      get-course-info: front-url
-      get-task-info: front-url
-      get-course-material-info: front-url
-      get-solution-info: front-url
+      reset-password: http://localhost:8081/front/logos-lms/api/v1/auth/reset-password # Артур сделает
+      reset-2fa: http://localhost:8080/logos-lms/api/v1/auth/reset-2fa # Артур сделает
+      activate-account: http://localhost:8080/front/logos-lms/api/v1/auth/activate-account # Артур сделает
+      get-course-info: front-url # Артур сделает
+      get-task-info: front-url # Артур сделает
+      get-course-material-info: front-url # Артур сделает
+      get-solution-info: front-url # Артур сделает
     sender-email: yvgnantnv@yandex.ru
     course-limit-params:
         max-file-amount-for-course-material: 20
@@ -44,7 +44,7 @@ spring:
         max-comment-amount-for-solution: 20
         max-comment-amount-for-task: 20
     file-storage:
-      base-path: D:\logos-lms
+      base-path: D:/logos-lms/courses #/var/lib/logos-lms/courses
 
   servlet:
     multipart:

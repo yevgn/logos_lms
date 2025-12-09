@@ -17,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.data.repository.query.Param;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -27,15 +27,16 @@ import org.springframework.web.bind.annotation.*;
 
 import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.config.AccessManager;
-import ru.antonov.oauth2_social.exception.FileNotFoundEx;
-import ru.antonov.oauth2_social.exception.IOEx;
+import ru.antonov.oauth2_social.common.exception.FileNotFoundEx;
+import ru.antonov.oauth2_social.common.exception.IOEx;
 import ru.antonov.oauth2_social.solution.common.SortBy;
 import ru.antonov.oauth2_social.solution.dto.*;
 import ru.antonov.oauth2_social.solution.entity.Solution;
+import ru.antonov.oauth2_social.solution.service.SolutionCommentService;
 import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.solution.service.SolutionService;
-import ru.antonov.oauth2_social.exception.AccessDeniedEx;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
+import ru.antonov.oauth2_social.common.exception.AccessDeniedEx;
+import ru.antonov.oauth2_social.common.exception.EntityNotFoundEx;
 
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.user.service.UserService;
@@ -59,6 +60,7 @@ import java.util.zip.ZipOutputStream;
 @Validated
 public class SolutionController {
     private final SolutionService solutionService;
+    private final SolutionCommentService solutionCommentService;
     private final UserService userService;
     private final AccessManager accessManager;
 
@@ -131,61 +133,61 @@ public class SolutionController {
         return ResponseEntity.ok(solutionService.saveSolution(principal, taskId, request));
     }
 
-    @Operation(
-            summary = "Отзыв решения по id",
-            description = "Требуется роль STUDENT",
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @Tag(name = "Управление решениями")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200"),
-            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
-            @ApiResponse(responseCode = "403",
-                    description = "Нет доступа",
-                    content = @io.swagger.v3.oas.annotations.media.Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "403",
-                                          "message": "Ошибка доступа. Вы не имеете доступа к этому решению"
-                                        }
-                                    """)
-                    )),
-            @ApiResponse(responseCode = "400",
-                    description = "Некорректные  данные или они отсутствуют",
-                    content = @io.swagger.v3.oas.annotations.media.Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "400",
-                                          "message": "Ошибка. Такого решения не существует"
-                                        }
-                                    """)
-                    )),
-            @ApiResponse(responseCode = "409",
-                    description = "Конфликт версий данных",
-                    content = @io.swagger.v3.oas.annotations.media.Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "409",
-                                          "message": "Решение было обновлено. Повторите попытку"
-                                        }
-                                    """)
-                    ))
-    }
-    )
-    @PostMapping(value = "/{solutionId}/revoke")
-    public ResponseEntity<?> revokeSolution(
-            @AuthenticationPrincipal User principal,
-            @PathVariable UUID solutionId
-    ) {
-        checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
-
-        solutionService.revokeSolution(principal, solutionId);
-
-        return ResponseEntity.ok().build();
-    }
+//    @Operation(
+//            summary = "Отзыв решения по id",
+//            description = "Требуется роль STUDENT",
+//            security = @SecurityRequirement(name = "bearerAuth")
+//    )
+//    @Tag(name = "Управление решениями")
+//    @ApiResponses(value = {
+//            @ApiResponse(responseCode = "200"),
+//            @ApiResponse(responseCode = "401", description = "Пользователь не аутентифицирован", content = @io.swagger.v3.oas.annotations.media.Content),
+//            @ApiResponse(responseCode = "403",
+//                    description = "Нет доступа",
+//                    content = @io.swagger.v3.oas.annotations.media.Content(
+//                            mediaType = "application/json",
+//                            examples = @ExampleObject(value = """
+//                                        {
+//                                          "status" : "403",
+//                                          "message": "Ошибка доступа. Вы не имеете доступа к этому решению"
+//                                        }
+//                                    """)
+//                    )),
+//            @ApiResponse(responseCode = "400",
+//                    description = "Некорректные  данные или они отсутствуют",
+//                    content = @io.swagger.v3.oas.annotations.media.Content(
+//                            mediaType = "application/json",
+//                            examples = @ExampleObject(value = """
+//                                        {
+//                                          "status" : "400",
+//                                          "message": "Ошибка. Такого решения не существует"
+//                                        }
+//                                    """)
+//                    )),
+//            @ApiResponse(responseCode = "409",
+//                    description = "Конфликт версий данных",
+//                    content = @io.swagger.v3.oas.annotations.media.Content(
+//                            mediaType = "application/json",
+//                            examples = @ExampleObject(value = """
+//                                        {
+//                                          "status" : "409",
+//                                          "message": "Решение было обновлено. Повторите попытку"
+//                                        }
+//                                    """)
+//                    ))
+//    }
+//    )
+//    @PatchMapping(value = "/{solutionId}/revoke")
+//    public ResponseEntity<?> revokeSolution(
+//            @AuthenticationPrincipal User principal,
+//            @PathVariable UUID solutionId
+//    ) {
+//        checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
+//
+//        solutionService.revokeSolution(principal, solutionId);
+//
+//        return ResponseEntity.ok().build();
+//    }
 
     @Operation(
             summary = "Обновление решения по id",
@@ -248,7 +250,6 @@ public class SolutionController {
             @PathVariable UUID solutionId,
             @Valid @ModelAttribute SolutionUpdateRequestDto request
     ) {
-
         checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
 
         return ResponseEntity.ok(solutionService.updateSolution(principal, solutionId, request));
@@ -365,7 +366,7 @@ public class SolutionController {
                     ))
     }
     )
-    @PostMapping("/{solutionId}/review")
+    @PatchMapping("/{solutionId}/review")
     public ResponseEntity<?> reviewSolution(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID solutionId,
@@ -378,7 +379,6 @@ public class SolutionController {
 
         return ResponseEntity.ok().build();
     }
-
 
     @Operation(
             summary = "Получение информации о решении по id",
@@ -614,7 +614,7 @@ public class SolutionController {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Такого пользователя не существует",
                         String.format("Ошибка поиска решений по курсу и id пользователя пользователем %s." +
-                                " Пользователя %s не существует", principal.getEmail(), userId)
+                                " Пользователя %s не существует", principal.getId(), userId)
                 ));
 
         checkPrincipalHasAccessToOtherOrElseThrow(principal, user, true, true);
@@ -670,7 +670,7 @@ public class SolutionController {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Такого пользователя не существует",
                         String.format("Ошибка поиска решений по курсу и id пользователя пользователем %s." +
-                                " Пользователя %s не существует", principal.getEmail(), userId)
+                                " Пользователя %s не существует", principal.getId(), userId)
                 ));
 
         checkPrincipalHasAccessToOtherOrElseThrow(principal, user, true, true);
@@ -729,7 +729,7 @@ public class SolutionController {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Такого пользователя не существует",
                         String.format("Ошибка поиска решений по курсу и id пользователя пользователем %s." +
-                                " Пользователя %s не существует", principal.getEmail(), userId)
+                                " Пользователя %s не существует", principal.getId(), userId)
                 ));
 
         checkPrincipalHasAccessToOtherOrElseThrow(principal, user, true, true);
@@ -782,7 +782,7 @@ public class SolutionController {
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Такого пользователя не существует",
                         String.format("Ошибка поиска решения по id задания и id пользователя пользователем %s." +
-                                " Пользователя %s не существует", principal.getEmail(), userId)
+                                " Пользователя %s не существует", principal.getId(), userId)
                 ));
 
         checkPrincipalHasAccessToOtherOrElseThrow(principal, user, true, true);
@@ -1002,7 +1002,7 @@ public class SolutionController {
                         "Ошибка. Решение не найдено",
                         String.format("Ошибка при получении файла решения пользователем %s. " +
                                         "Решения с id %s не существует",
-                                principal.getEmail(),
+                                principal.getId(),
                                 solutionId
                         )
                 ));
@@ -1173,7 +1173,7 @@ public class SolutionController {
     }
     )
     @PostMapping("/{solutionId}/comments")
-    public ResponseEntity<?> saveComment(
+    public ResponseEntity<SolutionCommentResponseDto> saveComment(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID solutionId,
             @Valid @RequestBody SolutionCommentCreateRequestDto request
@@ -1181,13 +1181,12 @@ public class SolutionController {
 
         checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
 
-        solutionService.saveComment(principal, solutionId, request);
-
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(solutionCommentService.saveComment(principal, solutionId, request));
     }
 
     @Operation(
-            summary = "Получение комментария к решению с указанным id",
+            summary = "Получение комментариев к решению с указанным id",
+            description = "Комментарии сортируются по убыванию даты публикации",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление комментариями")
@@ -1225,7 +1224,7 @@ public class SolutionController {
     ) {
         checkPrincipalHasAccessToSolutionOrElseThrow(principal, solutionId);
 
-        return ResponseEntity.ok(solutionService.findCommentsBySolutionId(principal, solutionId));
+        return ResponseEntity.ok(solutionCommentService.findAllBySolutionIdSortByPublishedAt(principal, solutionId));
     }
 
     @Operation(
@@ -1257,40 +1256,28 @@ public class SolutionController {
                                           "message": "Ошибка. Такого решения не существует"
                                         }
                                     """)
-                    )),
-            @ApiResponse(responseCode = "409",
-                    description = "Конфликт версий данных",
-                    content = @io.swagger.v3.oas.annotations.media.Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "409",
-                                          "message": "Решение было изменено другим пользователем"
-                                        }
-                                    """)
-                    )),
+                    ))
     }
     )
-    @DeleteMapping("/{solutionId}/comments/{commentId}")
+    @DeleteMapping("/comments/{commentId}")
     public ResponseEntity<?> deleteCommentById(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID solutionId,
             @PathVariable UUID commentId
     ) {
 
-        checkPrincipalHasAccessToComment(principal, solutionId, commentId);
+        checkPrincipalHasAccessToEditComment(principal, commentId);
 
-        solutionService.deleteComment(principal, solutionId, commentId);
+        solutionCommentService.deleteCommentById(principal, commentId);
 
         return ResponseEntity.ok().build();
     }
 
-    private void checkPrincipalHasAccessToComment(User principal, UUID solutionId, UUID commentId){
-        if(!accessManager.isPrincipalHasAccessToSolutionComment(principal, solutionId, commentId)){
+    private void checkPrincipalHasAccessToEditComment(User principal,  UUID commentId){
+        if(!accessManager.isPrincipalHasAccessToEditSolutionComment(principal, commentId)){
             throw new AccessDeniedEx(
                     "Ошибка доступа. У вас нет доступа к этому комментарию",
-                    String.format("Отказ в доступе к комментарию к заданию. Пользователь %s не имеет доступа к комментарию %s",
-                            principal.getEmail(), commentId)
+                    String.format("Отказ в доступе к комментарию к решению. Пользователь %s не имеет доступа к комментарию %s",
+                            principal.getId(), commentId)
             );
         }
     }
@@ -1301,7 +1288,7 @@ public class SolutionController {
             throw new AccessDeniedEx(
                     "Ошибка доступа. У вас нет доступа к этому курсу",
                     String.format("Отказ в доступе к курсу. Пользователь %s не имеет доступа к курсу %s",
-                            principal.getEmail(), courseId)
+                            principal.getId(), courseId)
             );
         }
     }
@@ -1311,7 +1298,7 @@ public class SolutionController {
             throw new AccessDeniedEx(
                     "Ошибка доступа. У вас нет доступа к этому заданию",
                     String.format("Отказ в доступе к заданию. Пользователь %s не имеет доступа к заданию %s",
-                            principal.getEmail(), taskId)
+                            principal.getId(), taskId)
             );
         }
     }
@@ -1321,7 +1308,7 @@ public class SolutionController {
             throw new AccessDeniedEx(
                     "Ошибка доступа. У вас нет доступа к этому решению",
                     String.format("Отказ в доступе к решению. Пользователь %s не имеет доступа к решению %s",
-                            principal.getEmail(), solutionId)
+                            principal.getId(), solutionId)
             );
         }
     }

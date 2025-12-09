@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.web.multipart.MultipartFile;
 
 import ru.antonov.oauth2_social.common.HasContentFiles;
+import ru.antonov.oauth2_social.common.validation.FilesNotEmpty;
 import ru.antonov.oauth2_social.common.validation.UniqueFileNames;
 
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.UUID;
 @Data
 @Builder
 @UniqueFileNames
+@FilesNotEmpty
 @NoArgsConstructor
 @AllArgsConstructor
 public class SolutionUpdateRequestDto implements HasContentFiles {

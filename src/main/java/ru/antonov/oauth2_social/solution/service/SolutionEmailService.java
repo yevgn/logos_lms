@@ -11,11 +11,9 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import ru.antonov.oauth2_social.course.entity.Course;
-import ru.antonov.oauth2_social.course.entity.CourseMaterial;
-import ru.antonov.oauth2_social.exception.MailAuthenticationEx;
-import ru.antonov.oauth2_social.exception.MailSendEx;
-import ru.antonov.oauth2_social.exception.MessagingEx;
+import ru.antonov.oauth2_social.common.exception.MailAuthenticationEx;
+import ru.antonov.oauth2_social.common.exception.MailSendEx;
+import ru.antonov.oauth2_social.common.exception.MessagingEx;
 import ru.antonov.oauth2_social.solution.entity.Solution;
 import ru.antonov.oauth2_social.user.entity.User;
 
@@ -33,6 +31,7 @@ public class SolutionEmailService {
 
     private final JavaMailSender mailSender;
 
+    @Async
     public void sendSolutionReviewedNotification(User user, Solution solution){
         String subject = "Появилась оценка решения!";
 

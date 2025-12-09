@@ -10,10 +10,9 @@ import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-import ru.antonov.oauth2_social.exception.MailAuthenticationEx;
-import ru.antonov.oauth2_social.exception.MailSendEx;
-import ru.antonov.oauth2_social.exception.MessagingEx;
-import ru.antonov.oauth2_social.user.entity.User;
+import ru.antonov.oauth2_social.common.exception.MailAuthenticationEx;
+import ru.antonov.oauth2_social.common.exception.MailSendEx;
+import ru.antonov.oauth2_social.common.exception.MessagingEx;
 
 import java.util.Arrays;
 

@@ -1,12 +1,12 @@
-package ru.antonov.oauth2_social.user.entity;
+package ru.antonov.oauth2_social.task.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.proxy.HibernateProxy;
-import ru.antonov.oauth2_social.course.entity.Course;
+import ru.antonov.oauth2_social.user.entity.User;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 
 @Getter
@@ -15,42 +15,24 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "institutions",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"email"}))
-public class Institution {
+@Table(name = "task_comments")
+public class TaskComment {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Setter(AccessLevel.NONE)
     private UUID id;
 
-    private String email;
+    @ManyToOne
+    @JoinColumn(name = "author_id")
+    private User author;
 
-    @Enumerated(EnumType.STRING)
-    private InstitutionType type;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "task_id")
+    private Task task;
 
-    @Column(name = "full_name")
-    private String fullName;
+    private String text;
 
-    @Column(name = "short_NAME")
-    private String shortName;
-
-    private String location;
-
-    @OneToMany(
-            mappedBy = "institution",
-            cascade = {CascadeType.MERGE}
-    )
-    private Set<User> users;
-
-    @OneToMany(mappedBy = "institution")
-    private Set<Course> courses;
-
-    @OneToMany(
-            mappedBy = "institution",
-            cascade = {CascadeType.MERGE, CascadeType.REMOVE},
-            orphanRemoval = true
-    )
-    private Set<Group> groups;
+    private LocalDateTime publishedAt;
 
     @Override
     public final int hashCode() {
@@ -72,7 +54,18 @@ public class Institution {
                 .getPersistentClass()
                 : this.getClass();
         if (thisEffectiveClass != oEffectiveClass) return false;
-        Institution institution = (Institution) o;
-        return getId() != null && Objects.equals(getId(), institution.getId());
+        TaskComment comment = (TaskComment) o;
+        return getId() != null && Objects.equals(getId(), comment.getId());
+    }
+
+    @Override
+    public String toString() {
+        return "TaskComment{" +
+                "id=" + id +
+                ", author_id=" + author.getId() +
+                ", task_id=" + task.getId() +
+                ", text='" + text + '\'' +
+                ", publishedAt=" + publishedAt +
+                '}';
     }
 }

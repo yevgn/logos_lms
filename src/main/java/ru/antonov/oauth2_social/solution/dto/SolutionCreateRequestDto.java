@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.web.multipart.MultipartFile;
 import ru.antonov.oauth2_social.common.HasContentFiles;
+import ru.antonov.oauth2_social.common.validation.FilesNotEmpty;
 import ru.antonov.oauth2_social.common.validation.UniqueFileNames;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @UniqueFileNames
+@FilesNotEmpty
 public class SolutionCreateRequestDto implements HasContentFiles {
     @Size(max = 5, message = "Нельзя загрузить больше 5 файлов за один раз")
     @NotEmpty(message = "Поле content не может быть пустым или отсутствовать")

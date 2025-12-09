@@ -1,8 +1,10 @@
 package ru.antonov.oauth2_social.task.dto;
 
+
 import ru.antonov.oauth2_social.solution.dto.SolutionCommentResponseDto;
-import ru.antonov.oauth2_social.solution.entity.Solution;
+import ru.antonov.oauth2_social.solution.entity.SolutionComment;
 import ru.antonov.oauth2_social.task.entity.Task;
+import ru.antonov.oauth2_social.task.entity.TaskComment;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.util.List;
@@ -24,6 +26,7 @@ public class DtoFactory {
                                 null
                 )
                 .content(
+                        task.getContent() == null ? List.of() :
                         task.getContent()
                                 .stream()
                                 .map(ru.antonov.oauth2_social.course.dto.DtoFactory::makeContentFileResponseDto)
@@ -31,11 +34,24 @@ public class DtoFactory {
                 )
                 .isForEveryone(task.isForEveryone())
                 .targetUserList(
+                        targetUserList == null ? List.of() :
                         targetUserList
                                 .stream()
                                 .map(ru.antonov.oauth2_social.user.dto.DtoFactory::makeUserShortResponseDto)
                                 .toList()
                 )
+                .build();
+    }
+
+    public static TaskCommentResponseDto makeTaskCommentResponseDto(TaskComment comment){
+        return TaskCommentResponseDto
+                .builder()
+                .id(comment.getId())
+                .author(comment.getAuthor() == null ? null
+                        : ru.antonov.oauth2_social.user.dto.DtoFactory.makeUserShortResponseDto(comment.getAuthor())
+                )
+                .text(comment.getText())
+                .publishedAt(comment.getPublishedAt())
                 .build();
     }
 
@@ -57,15 +73,5 @@ public class DtoFactory {
                 .build();
     }
 
-    public static TaskCommentResponseDto makeTaskCommentResponseDto(
-            Task.TaskComment comment, User author
-    ){
-        return TaskCommentResponseDto
-                .builder()
-                .id(comment.getId())
-                .text(comment.getText())
-                .publishedAt(comment.getPublishedAt())
-                .author(author == null ? null : ru.antonov.oauth2_social.user.dto.DtoFactory.makeUserShortResponseDto(author))
-                .build();
-    }
+
 }

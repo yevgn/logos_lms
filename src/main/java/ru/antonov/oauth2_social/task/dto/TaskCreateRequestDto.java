@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.web.multipart.MultipartFile;
 import ru.antonov.oauth2_social.common.HasContentFiles;
+import ru.antonov.oauth2_social.common.validation.FilesNotEmpty;
 import ru.antonov.oauth2_social.task.validation.TargetUsersNotNullOrEmpty;
 import ru.antonov.oauth2_social.task.validation.ToSubmitAtLeastOneHourLater;
 import ru.antonov.oauth2_social.common.validation.UniqueFileNames;
@@ -19,6 +20,7 @@ import java.util.UUID;
 @Data
 @Builder
 @UniqueFileNames
+@FilesNotEmpty
 @TargetUsersNotNullOrEmpty
 @NoArgsConstructor
 @AllArgsConstructor

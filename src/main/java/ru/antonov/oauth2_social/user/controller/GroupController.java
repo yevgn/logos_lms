@@ -19,8 +19,8 @@ import ru.antonov.oauth2_social.user.entity.EntityFactory;
 import ru.antonov.oauth2_social.user.entity.Group;
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.user.service.GroupService;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
-import ru.antonov.oauth2_social.exception.AccessDeniedEx;
+import ru.antonov.oauth2_social.common.exception.EntityNotFoundEx;
+import ru.antonov.oauth2_social.common.exception.AccessDeniedEx;
 
 import java.util.List;
 import java.util.UUID;
@@ -193,7 +193,7 @@ public class GroupController {
     @GetMapping("/institution/{institutionId}")
     public ResponseEntity<List<GroupResponseDto>> findGroupsByInstitutionId(
             @AuthenticationPrincipal User principal,
-            @RequestParam("institution_id") UUID institutionId
+            @PathVariable UUID institutionId
     ){
         checkUserHasAccessToInstitutionOrElseThrow(principal, institutionId);
 
@@ -241,7 +241,7 @@ public class GroupController {
     @GetMapping("/{groupId}")
     public ResponseEntity<GroupResponseDto> findGroupById(
             @AuthenticationPrincipal User principal,
-            @RequestParam("group_id") UUID groupId
+            @PathVariable UUID groupId
     ){
         checkUserHasAccessToGroupOrElseThrow(principal, groupId);
 

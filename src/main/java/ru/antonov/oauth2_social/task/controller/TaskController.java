@@ -3,7 +3,7 @@ package ru.antonov.oauth2_social.task.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.media.Schema;
+
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -13,9 +13,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.data.repository.query.Param;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +24,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import ru.antonov.oauth2_social.common.exception.*;
 import ru.antonov.oauth2_social.config.AccessManager;
 
 import ru.antonov.oauth2_social.task.dto.*;
@@ -34,16 +35,16 @@ import ru.antonov.oauth2_social.course.entity.Course;
 import ru.antonov.oauth2_social.task.entity.Task;
 
 import ru.antonov.oauth2_social.course.service.CourseService;
+import ru.antonov.oauth2_social.task.service.TaskCommentService;
 import ru.antonov.oauth2_social.task.service.TaskService;
-import ru.antonov.oauth2_social.exception.AccessDeniedEx;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
 
-import ru.antonov.oauth2_social.exception.FileNotFoundEx;
-import ru.antonov.oauth2_social.exception.IOEx;
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.user.service.UserService;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -63,12 +64,14 @@ public class TaskController {
     private final AccessManager accessManager;
     private final UserService userService;
     private final CourseService courseService;
+    private final TaskCommentService taskCommentService;
 
     @Value("${spring.application.file-storage.base-path}")
     private String basePath;
 
     @Operation(
             summary = "Добавление задания к курсу",
+            description = "Требуется роль ADMIN или TUTOR",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление заданиями")
@@ -135,6 +138,8 @@ public class TaskController {
 
     @Operation(
             summary = "Обновление задания по id",
+            description = "Требуется роль ADMIN или TUTOR. Обновить задание может только админ, создатель курса, а также" +
+                    " автор задания",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление заданиями")
@@ -210,6 +215,8 @@ public class TaskController {
 
     @Operation(
             summary = "Удаление задания по id",
+            description = "Требуется роль ADMIN или TUTOR. Удалить задание может только админ, создатель курса, а также" +
+                    " автор задания",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление заданиями")
@@ -383,6 +390,7 @@ public class TaskController {
 
     @Operation(
             summary = "Получение информации о заданиях по id курса",
+            description = "Требуется роль ADMIN или TUTOR",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление заданиями")
@@ -427,6 +435,8 @@ public class TaskController {
                                 courseId
                         )
                 ));
+
+        checkPrincipalHasAccessToCourseOrElseThrow(principal, courseId, false, false);
 
         return ResponseEntity.ok(taskService.getAllTaskInfoByCourseId(courseId));
     }
@@ -511,18 +521,34 @@ public class TaskController {
                         )
                 );
 
-        Resource resource = taskService.getTaskFile(file.getPath());
+        try {
+            Resource resource = taskService.getTaskFile(file.getPath());
+            String disposition = download ? "attachment" : "inline";
+            String contentType = courseService.resolveContentType(file.getOriginalFileName());
+            String encodedFileName = URLEncoder.encode(file.getOriginalFileName(), StandardCharsets.UTF_8)
+                    .replace("+", "%20");
 
-        String disposition = download ? "attachment" : "inline";
-        String contentType = taskService.resolveContentType(file.getOriginalFileName());
-
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        disposition + "; filename=\"" + file.getOriginalFileName() + "\""
-                )
-                .body(resource);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(
+                            HttpHeaders.CONTENT_DISPOSITION,
+                            String.format("%s; filename*=UTF-8''%s", disposition, encodedFileName)
+                    )
+                    .body(resource);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentEx(
+                    "Ошибка. Файл не найден",
+                    String.format("Ошибка при получении файла task пользователем %s. " +
+                            "Файл %s не найден", principal.getId(), fileId
+                    )
+            );
+        } catch (MalformedURLException ex) {
+            throw new MalformedFileUrlEx(
+                    "Ошибка на сервере",
+                    String.format("Ошибка при получении файла task пользователем %s.\n%s",
+                            principal.getId(), ex.getMessage())
+            );
+        }
     }
 
     @Operation(
@@ -581,7 +607,7 @@ public class TaskController {
                         "Ошибка. Задание не найдено",
                         String.format("Ошибка при получении файла задания пользователем %s. " +
                                         "Задания с id %s не существует",
-                                principal.getEmail(),
+                                principal.getId(),
                                 taskId
                         )
                 ));
@@ -589,12 +615,17 @@ public class TaskController {
         List<Content> files = task.getContent();
 
         response.setContentType("application/zip");
-        response.setHeader("Content-Disposition", "attachment; filename=\"" + task.getTitle() + "\"");
+        String encodedFileName = URLEncoder.encode(task.getTitle(), StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        response.setHeader(
+                HttpHeaders.CONTENT_DISPOSITION,
+                String.format("attachment; filename*=UTF-8''%s" , encodedFileName)
+        );
 
         try (ZipOutputStream zipOut = new ZipOutputStream(response.getOutputStream())) {
             for (Content file : files) {
                 Path filePath = Paths.get(basePath).resolve(file.getPath());
-                Resource resource = new UrlResource(filePath.toUri());
+                Resource resource = new FileSystemResource(filePath);
 
                 if (resource.exists() && resource.isReadable()) {
                     zipOut.putNextEntry(new ZipEntry(file.getOriginalFileName()));
@@ -655,7 +686,7 @@ public class TaskController {
     }
     )
     @PostMapping("/{taskId}/comments")
-    public ResponseEntity<?> saveComment(
+    public ResponseEntity<TaskCommentResponseDto> saveComment(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID taskId,
             @Valid @RequestBody TaskCommentCreateRequestDto request
@@ -663,13 +694,12 @@ public class TaskController {
 
         checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
 
-        taskService.saveComment(principal, taskId, request);
-
-        return ResponseEntity.ok().build();
+        return(ResponseEntity.ok(taskCommentService.saveComment(principal, taskId, request)));
     }
 
     @Operation(
             summary = "Получение комментариев к заданию с указанным id",
+            description = "Комментарии сортируются по убыванию даты публикации",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление комментариями")
@@ -707,7 +737,7 @@ public class TaskController {
     ) {
         checkPrincipalHasAccessToTaskOrElseThrow(principal, taskId);
 
-        return ResponseEntity.ok(taskService.findCommentsByTaskId(principal, taskId));
+        return ResponseEntity.ok(taskCommentService.findAllByTaskIdSortByPublishedAt(principal, taskId));
     }
 
     @Operation(
@@ -739,30 +769,18 @@ public class TaskController {
                                           "message": "Ошибка. Такого задания не существует"
                                         }
                                     """)
-                    )),
-            @ApiResponse(responseCode = "409",
-                    description = "Конфликт версий данных",
-                    content = @io.swagger.v3.oas.annotations.media.Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                        {
-                                          "status" : "409",
-                                          "message": "Задание было изменено другим пользователем"
-                                        }
-                                    """)
-                    )),
+                    ))
     }
     )
-    @DeleteMapping("/{taskId}/comments/{commentId}")
+    @DeleteMapping("/comments/{commentId}")
     public ResponseEntity<?> deleteCommentById(
             @AuthenticationPrincipal User principal,
-            @PathVariable UUID taskId,
             @PathVariable UUID commentId
     ) {
 
-        checkPrincipalHasAccessToComment(principal, taskId, commentId);
+        checkPrincipalHasAccessToEditComment(principal, commentId);
 
-        taskService.deleteComment(principal, taskId, commentId);
+        taskCommentService.deleteCommentById(principal, commentId);
 
         return ResponseEntity.ok().build();
     }
@@ -773,7 +791,7 @@ public class TaskController {
             throw new AccessDeniedEx(
                     "Ошибка доступа. У вас нет доступа к этому курсу",
                     String.format("Отказ в доступе к курсу. Пользователь %s не имеет доступа к курсу %s",
-                            principal.getEmail(), courseId)
+                            principal.getId(), courseId)
             );
         }
     }
@@ -783,17 +801,17 @@ public class TaskController {
             throw new AccessDeniedEx(
                     "Ошибка доступа. У вас нет доступа к этому заданию",
                     String.format("Отказ в доступе к заданию. Пользователь %s не имеет доступа к заданию %s",
-                            principal.getEmail(), taskId)
+                            principal.getId(), taskId)
             );
         }
     }
 
-    private void checkPrincipalHasAccessToComment(User principal, UUID taskId, UUID commentId){
-        if(!accessManager.isPrincipalHasAccessToTaskComment(principal, taskId, commentId)){
+    private void checkPrincipalHasAccessToEditComment(User principal, UUID commentId){
+        if(!accessManager.isPrincipalHasAccessToEditTaskComment(principal, commentId)){
             throw new AccessDeniedEx(
                     "Ошибка доступа. У вас нет доступа к этому комментарию",
                     String.format("Отказ в доступе к комментарию к заданию. Пользователь %s не имеет доступа к комментарию %s",
-                            principal.getEmail(), commentId)
+                            principal.getId(), commentId)
             );
         }
     }

@@ -18,11 +18,8 @@ public class DtoFactory {
                 .code(course.getCode())
                 .name(course.getName())
                 .institution(ru.antonov.oauth2_social.user.dto.DtoFactory.makeInstitutionShortResponseDto(course.getInstitution()))
-                .creator(creator == null ? null : ru.antonov.oauth2_social.user.dto.DtoFactory.makeUserShortResponseDto(creator))
-                .users(
-                        users.stream()
-                                .map(ru.antonov.oauth2_social.user.dto.DtoFactory::makeUserShortResponseDto)
-                                .toList()
+                .members(
+                        makeCourseUsersWithCreatorShortResponseDto(creator, users)
                 )
                 .build();
     }
@@ -38,7 +35,6 @@ public class DtoFactory {
                 .build();
     }
 
-
     public static CourseMaterialResponseDto makeCourseMaterialResponseDto(CourseMaterial courseMaterial) {
         return CourseMaterialResponseDto
                 .builder()
@@ -50,6 +46,7 @@ public class DtoFactory {
                                 null
                 )
                 .content(
+                        courseMaterial.getContent() == null ? List.of() :
                         courseMaterial.getContent()
                                 .stream()
                                 .map(DtoFactory::makeContentFileResponseDto)
@@ -65,6 +62,19 @@ public class DtoFactory {
                 .builder()
                 .id(content.getId())
                 .originalFileName(content.getOriginalFileName())
+                .build();
+    }
+
+    public static CourseUsersWithCreatorShortResponseDto makeCourseUsersWithCreatorShortResponseDto(
+            User creator, List<User> users
+    ){
+        return CourseUsersWithCreatorShortResponseDto
+                .builder()
+                .creator(creator == null ? null : ru.antonov.oauth2_social.user.dto.DtoFactory.makeUserShortResponseDto(creator))
+                .users(users == null ?
+                        List.of() :
+                        users.stream().map(ru.antonov.oauth2_social.user.dto.DtoFactory::makeUserShortResponseDto).toList()
+                        )
                 .build();
     }
 

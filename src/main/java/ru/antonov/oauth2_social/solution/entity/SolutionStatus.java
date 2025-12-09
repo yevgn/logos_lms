@@ -4,6 +4,6 @@ public enum SolutionStatus {
     SUBMITTED,
     SUBMITTED_LATE,
     ACCEPTED,
-    RETURNED,
-    REVOKED
+    RETURNED
+  //  REVOKED
 }

@@ -1,6 +1,5 @@
 package ru.antonov.oauth2_social.user.service;
 
-import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.passay.CharacterRule;
@@ -12,12 +11,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import ru.antonov.oauth2_social.user.entity.Group;
+import ru.antonov.oauth2_social.user.entity.Institution;
+import ru.antonov.oauth2_social.user.entity.Role;
 import ru.antonov.oauth2_social.user.entity.User;
-import ru.antonov.oauth2_social.exception.InvalidFileDataFormatEx;
+import ru.antonov.oauth2_social.common.exception.InvalidFileDataFormatEx;
 import ru.antonov.oauth2_social.user.repository.UserRepository;
-import ru.antonov.oauth2_social.exception.DBConstraintViolationEx;
-import ru.antonov.oauth2_social.exception.EntityNotFoundEx;
-import ru.antonov.oauth2_social.exception.IOEx;
+import ru.antonov.oauth2_social.common.exception.DBConstraintViolationEx;
+import ru.antonov.oauth2_social.common.exception.EntityNotFoundEx;
+import ru.antonov.oauth2_social.common.exception.IOEx;
 
 import java.io.IOException;
 
@@ -52,6 +53,7 @@ public class UserService {
         return userRepository.findAllByIdList(userIdList);
     }
 
+
     public List<User> findAllByGroupIdList(List<UUID> groupIdList){
         return userRepository.findAllByGroupIdList(groupIdList);
     }
@@ -82,8 +84,9 @@ public class UserService {
         }
     }
 
-    public List<User> saveAllCSV(MultipartFile file, UUID institutionId, UUID groupId) {
+    public List<User> saveAllCSV(MultipartFile file, Institution institution, UUID groupId) {
         List<CsvParser.UserCsv> userCsvs;
+        User principal = ((User) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
 
         try {
             userCsvs = csvParser.parseCsv(file);
@@ -91,47 +94,59 @@ public class UserService {
 
             throw new IOEx(
                     "Ошибка на сервере",
-                    String.format("Ошибка при чтении файла %s пользователя %s", file.getOriginalFilename(),
+                    String.format("Ошибка при загрузке списка пользователей в csv. Ошибка при чтении файла %s" +
+                                    " пользователя %s", file.getOriginalFilename(),
                             ((User) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getId())
             );
 
-        } catch (IllegalArgumentException | ConstraintViolationException ex) {
-
+        } catch (IllegalArgumentException ex) {
             throw new InvalidFileDataFormatEx(
                     "Неправильный формат данных",
-                    String.format("Ошибка при добавлении списка студентов. Пользователь %s пытается загрузить файл с " +
+                    String.format("Ошибка при добавлении списка студентов csv. Пользователь %s пытается загрузить файл с " +
                                     "неправильным форматом данных",
-                            ((User) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getId()
+                            principal.getId()
                     )
             );
-
         }
 
         List<User> users = userCsvs.stream()
                 .map(csv -> {
                     Group group = null;
-                    if (groupId == null) {
-                        if (csv.getGroupName() != null) {
-                            group = groupService.findByInstitutionIdAndName(institutionId, csv.getGroupName())
+                    if(csv.getRole() == Role.STUDENT) {
+                        if (groupId == null) {
+                            if (csv.getGroupName() != null) {
+                                group = groupService.findByInstitutionIdAndName(institution.getId(), csv.getGroupName())
+                                        .orElseThrow(() ->
+                                                new EntityNotFoundEx(
+                                                        String.format("Ошибка. Группы %s в этом учебном заведении не существует",
+                                                                csv.getGroupName()),
+                                                        String.format("Ошибка при загрузке сsv списка пользователей " +
+                                                                        "пользователем %s. Группы %s в учебном заведении %s не существует",
+                                                                principal.getId(), csv.getGroupName(), institution.getId())
+                                                )
+                                        );
+                            } else{
+                                throw new InvalidFileDataFormatEx(
+                                        String.format("Неправильный формат данных. Студент %s %s не имеет группы",
+                                                csv.getSurname(), csv.getName()),
+                                        String.format("Ошибка при добавлении списка студентов csv. Пользователь %s пытается загрузить файл с " +
+                                                        "неправильным форматом данных",
+                                                principal.getId()
+                                        )
+                                );
+                            }
+                        } else {
+                            group = groupService.findById(groupId)
                                     .orElseThrow(() ->
                                             new EntityNotFoundEx(
                                                     String.format("Группы %s в этом учебном заведении не существует",
                                                             csv.getGroupName()),
-                                                    String.format("Группы %s в учебном заведении %s не существует",
-                                                            csv.getGroupName(), institutionId)
+                                                    String.format("Ошибка при загрузке сsv списка пользователей" +
+                                                                    " пользователем %s. Группы %s в учебном заведении %s не существует",
+                                                            principal.getId(), csv.getGroupName(), institution.getId())
                                             )
                                     );
                         }
-                    } else {
-                        group = groupService.findById(groupId)
-                                .orElseThrow(() ->
-                                        new EntityNotFoundEx(
-                                                String.format("Группы %s в этом учебном заведении не существует",
-                                                        csv.getGroupName()),
-                                                String.format("Группы %s в учебном заведении %s не существует",
-                                                        csv.getGroupName(), institutionId)
-                                        )
-                                );
                     }
 
                     // todo ИСПРАВИТЬ isEnabled(false)
@@ -140,6 +155,7 @@ public class UserService {
                             .name(csv.getName())
                             .surname(csv.getSurname())
                             .patronymic(csv.getPatronymic())
+                            .institution(institution)
                             .group(group)
                             .role(csv.getRole())
                             .age(csv.getAge())
@@ -161,11 +177,12 @@ public class UserService {
 
             if (root instanceof SQLException sqlEx && sqlEx.getMessage().toLowerCase().contains("unique")) {
                 message = "Ошибка. Один или несколько указанных пользователей уже существуют";
-                debugMessage = "Ошибка при добавлении списка пользователей. " +
-                        "Один или несколько указанных пользователей уже существуют";
+                debugMessage = String.format("Ошибка при добавлении csv списка пользователей пользователем %s. " +
+                        "Один или несколько указанных пользователей уже существуют", principal.getId());
             } else {
                 message = "Нарушены ограничения целостности данных. Возможно, вы пытаетесь добавить некорректные или уже существующие данные";
-                debugMessage = (root != null ? root.getMessage() : ex.getMessage());
+                debugMessage = String.format("Ошибка при добавлении csv списка пользователей пользователем %s\n%s",
+                        principal.getId(), root != null ? root.getMessage() : ex.getMessage());
             }
 
             throw new DBConstraintViolationEx(message, debugMessage);

@@ -63,8 +63,9 @@ public class CsvParser {
                         .surname(csvRecord.get("surname"))
                         .patronymic((csvRecord.get("patronymic").isBlank() ? null : csvRecord.get("patronymic")))
                         .email(csvRecord.get("email"))
-                        .groupName(csvRecord.get("group").isBlank() ? null : csvRecord.get("group"))
-                        .age(csvRecord.get("age").isBlank() ? null : Integer.parseInt(csvRecord.get("age")))
+                        .groupName(csvRecord.get("group") == null || csvRecord.get("group").isBlank() ? null : csvRecord.get("group"))
+                        .age(csvRecord.get("age") == null || csvRecord.get("age").isBlank() ? null :
+                                Integer.parseInt(csvRecord.get("age")))
                         .role(role)
                         .build();
 

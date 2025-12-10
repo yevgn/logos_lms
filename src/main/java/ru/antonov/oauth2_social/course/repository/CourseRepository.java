@@ -19,6 +19,12 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
     List<Course> findAllByInstitutionId(UUID institutionId);
 
     @Query("""
+            SELECT count(c) FROM Course c
+            WHERE c.institution.id = :institutionId
+            """)
+    long countAllByInstitutionId(UUID institutionId);
+
+    @Query("""
                 SELECT c FROM Course c
                 JOIN FETCH c.courseUsers cu
                 JOIN FETCH cu.user u

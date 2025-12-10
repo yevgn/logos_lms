@@ -57,6 +57,10 @@ public class CourseService {
     private int maxSolutionFileAmountForCourse;
     @Value("${spring.application.course-limit-params.max-file-amount-for-course-material}")
     private int maxFileAmountForCourseMaterial;
+    @Value("${spring.application.course-limit-params.max-course-amount-for-institution}")
+    private int maxCourseAmountForInstitution;
+    @Value("${spring.application.course-limit-params.max-course-material-amount-for-course}")
+    private int maxCourseMaterialAmountForCourse;
     @Value("${spring.application.file-storage.base-path}")
     private String basePath;
 
@@ -107,6 +111,15 @@ public class CourseService {
 
     @Transactional(rollbackFor = Exception.class)
     public CourseResponseDto save(CourseCreateWithUserIdListRequestDto request, User principal) {
+        if(courseLimitCounter.isCourseAmountForInstitutionExceedsLimit(principal.getInstitution().getId(), 1)){
+            throw new CourseAmountForInstitutionExceedsLimitEx(
+                    String.format("Ошибка создания курса. Превышено максимальное количество курсов для одного" +
+                            " учебного заведения - %s", maxCourseAmountForInstitution),
+                    String.format("Ошибка при создании курса пользователем %s. Превышено максимальное количество курсов" +
+                            " для одного учебного заведения - %s", principal.getId(), maxCourseAmountForInstitution)
+            );
+        }
+
         User creator = userService.findById(principal.getId())
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Пользователя, который пытается создать курс, не существует",
@@ -150,6 +163,15 @@ public class CourseService {
 
     @Transactional(rollbackFor = Exception.class)
     public CourseResponseDto save(CourseCreateWithGroupIdListRequestDto request, User principal) {
+        if(courseLimitCounter.isCourseAmountForInstitutionExceedsLimit(principal.getInstitution().getId(), 1)){
+            throw new CourseAmountForInstitutionExceedsLimitEx(
+                    String.format("Ошибка создания курса. Превышено максимальное количество курсов для одного" +
+                            " учебного заведения - %s", maxCourseAmountForInstitution),
+                    String.format("Ошибка при создании курса пользователем %s. Превышено максимальное количество курсов" +
+                            " для одного учебного заведения - %s", principal.getId(), maxCourseAmountForInstitution)
+            );
+        }
+
         User creator = userService.findById(principal.getId())
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Пользователя, который пытается создать курс, не существует",
@@ -531,6 +553,17 @@ public class CourseService {
 
     @Transactional(rollbackFor = Exception.class)
     public CourseMaterialResponseDto saveCourseMaterial(User principal, UUID courseId, CourseMaterialCreateRequestDto request) {
+        if(courseLimitCounter.isCourseMaterialAmountForCourseExceedsLimit(courseId, 1)){
+            throw new CourseMaterialAmountForCourseExceedsLimitEx(
+                    String.format("Ошибка создания курса. Превышено максимальное количество учебных материалов для одного" +
+                            " курса - %s", maxCourseMaterialAmountForCourse),
+                    String.format("Ошибка при добавлении учебного материала пользователем %s. Превышено максимальное " +
+                            "количество учебных материалов для одного курса - %s",
+                            principal.getId(), maxCourseMaterialAmountForCourse
+                    )
+            );
+        }
+
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         "Ошибка. Данного курса не существует",
@@ -824,6 +857,7 @@ public class CourseService {
                 .toList();
     }
 
+    // todo проверить на update
     @Transactional
     public List<CourseMaterialResponseDto> findAllCourseMaterialsByCourseId(User principal, UUID courseId) {
         Course course = courseRepository.findById(courseId)

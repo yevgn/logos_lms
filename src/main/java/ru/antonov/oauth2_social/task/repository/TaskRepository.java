@@ -29,6 +29,12 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     Optional<Task> findByIdWithTaskUsers(UUID taskId);
 
     @Query("""
+            SELECT count(t) FROM Task t
+            WHERE t.course.id = :courseId
+            """)
+    long countAllByCourseId(UUID courseId);
+
+    @Query("""
         SELECT t FROM Task t
         LEFT JOIN FETCH t.solutions s
         LEFT JOIN FETCH t.creator cr

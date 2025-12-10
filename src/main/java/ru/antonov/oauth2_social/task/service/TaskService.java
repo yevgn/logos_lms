@@ -19,6 +19,7 @@ import ru.antonov.oauth2_social.course.service.CourseLimitCounter;
 import ru.antonov.oauth2_social.course.service.CourseService;
 import ru.antonov.oauth2_social.common.FileService;
 import ru.antonov.oauth2_social.task.dto.*;
+import ru.antonov.oauth2_social.task.exception.TaskAmountForCourseExceedsLimitEx;
 import ru.antonov.oauth2_social.task.repository.TaskRepository;
 import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.task.entity.TaskUser;
@@ -54,12 +55,25 @@ public class TaskService {
     private int maxTaskAndMaterialFileAmountForCourse;
     @Value("${spring.application.course-limit-params.max-file-amount-for-task}")
     private int maxFileAmountForTask;
+    @Value("${spring.application.course-limit-params.max-task-amount-for-course}")
+    private int maxTaskAmountForCourse;
 
     @Value("${spring.application.file-storage.base-path}")
     private String basePath;
 
     @Transactional(rollbackFor = Exception.class)
     public TaskResponseDto saveTask(User principal, UUID courseId, TaskCreateRequestDto request) {
+        if(courseLimitCounter.isTaskAmountForCourseExceedsLimit(courseId, 1)){
+            throw new TaskAmountForCourseExceedsLimitEx(
+                    String.format("Ошибка создания задания. Превышено максимальное количество заданий для одного" +
+                            " курса - %s", maxTaskAmountForCourse),
+                    String.format("Ошибка при добавлении задания пользователем %s. Превышено максимальное " +
+                                    "количество заданий для одного курса - %s",
+                            principal.getId(), maxTaskAmountForCourse
+                    )
+            );
+        }
+
         Course course = courseService.findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundEx(
                         String.format("Ошибка. Курса с id %s не существует", courseId),

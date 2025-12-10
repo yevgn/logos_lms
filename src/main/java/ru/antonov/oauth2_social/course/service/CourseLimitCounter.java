@@ -5,11 +5,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import ru.antonov.oauth2_social.course.repository.CourseMaterialRepository;
+import ru.antonov.oauth2_social.course.repository.CourseRepository;
 import ru.antonov.oauth2_social.course.repository.CourseUserRepository;
 import ru.antonov.oauth2_social.common.exception.FileNotFoundEx;
 import ru.antonov.oauth2_social.common.exception.IOEx;
 import ru.antonov.oauth2_social.solution.repository.SolutionCommentRepository;
 import ru.antonov.oauth2_social.task.repository.TaskCommentRepository;
+import ru.antonov.oauth2_social.task.repository.TaskRepository;
 
 import java.io.File;
 import java.io.IOException;
@@ -37,11 +40,20 @@ public class CourseLimitCounter {
     private int maxCommentAmountForSolution;
     @Value("${spring.application.course-limit-params.max-comment-amount-for-task}")
     private int maxCommentAmountForTask;
+    @Value("${spring.application.course-limit-params.max-course-amount-for-institution}")
+    private int maxCourseAmountForInstitution;
+    @Value("${spring.application.course-limit-params.max-course-material-amount-for-course}")
+    private int maxCourseMaterialAmountForCourse;
+    @Value("${spring.application.course-limit-params.max-task-amount-for-course}")
+    private int maxTaskAmountForCourse;
     @Value("${spring.application.file-storage.base-path}")
     private String basePath;
 
     private final CourseUserRepository courseUserRepository;
+    private final CourseRepository courseRepository;
+    private final CourseMaterialRepository courseMaterialRepository;
     private final TaskCommentRepository taskCommentRepository;
+    private final TaskRepository taskRepository;
     private final SolutionCommentRepository solutionCommentRepository;
 
     public boolean isTaskAndMaterialFileAmountForCourseExceedsLimit(UUID courseId, int fileAmountToUpload){
@@ -169,5 +181,17 @@ public class CourseLimitCounter {
     public boolean isUserAmountForCourseExceedsLimit(int newUsers, UUID courseId) throws EntityNotFoundException {
         int courseUserCount = courseUserRepository.getUserCountForCourseByCourseId(courseId);
         return newUsers + courseUserCount > maxUserAmountForCourse;
+    }
+
+    public boolean isCourseAmountForInstitutionExceedsLimit(UUID institutionId, int courseAmountToCreate) {
+        return courseRepository.countAllByInstitutionId(institutionId) + courseAmountToCreate > maxCourseAmountForInstitution;
+    }
+
+    public boolean isCourseMaterialAmountForCourseExceedsLimit(UUID courseId, int amountToUpload) {
+        return courseMaterialRepository.countAllByCourseId(courseId) + amountToUpload > maxCourseMaterialAmountForCourse;
+    }
+
+    public boolean isTaskAmountForCourseExceedsLimit(UUID courseId, int amountToUpload) {
+        return taskRepository.countAllByCourseId(courseId) + amountToUpload > maxTaskAmountForCourse;
     }
 }

@@ -3,7 +3,6 @@ package ru.antonov.oauth2_social.course.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -588,7 +587,7 @@ public class CourseController {
     }
     )
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<CourseShortResponseDto>> getCoursesByUserId(
+    public ResponseEntity<List<CourseWithInstitutionAndCreatorShortResponseDto>> getCoursesByUserId(
             @AuthenticationPrincipal User principal,
             @PathVariable UUID userId,
             @Parameter(

@@ -741,7 +741,7 @@ public class SolutionController {
     }
 
     @Operation(
-            summary = "Получение Решений пользователя с id userId для задания с id taskId",
+            summary = "Получение решения пользователя с id userId для задания с id taskId",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление решениями")
@@ -793,7 +793,8 @@ public class SolutionController {
 
     @Operation(
             summary = "Получение решений участников курса с id courseId для всех заданий этого курса",
-            description = "Требуется роль ADMIN или TUTOR.",
+            description = "Требуется роль ADMIN или TUTOR. Список solutions в теле ответа отсортирован по возрастанию " +
+                    " даты прикрепления решения  ",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление решениями")
@@ -843,7 +844,8 @@ public class SolutionController {
 
     @Operation(
             summary = "Получение НЕПРОВЕРЕННЫХ решений участников курса с id courseId для всех заданий этого курса",
-            description = "Требуется роль ADMIN или TUTOR.",
+            description = "Требуется роль ADMIN или TUTOR. Список solutions в теле ответа отсортирован по возрастанию " +
+                    " даты прикрепления решения  ",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление решениями")
@@ -893,7 +895,8 @@ public class SolutionController {
 
     @Operation(
             summary = "Получение ПРОВЕРЕННЫХ решений участников курса с id courseId для всех заданий этого курса",
-            description = "Требуется роль ADMIN или TUTOR.",
+            description = "Требуется роль ADMIN или TUTOR. Список solutions в теле ответа отсортирован по возрастанию " +
+                    " даты прикрепления решения  ",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @Tag(name = "Управление решениями")
@@ -940,6 +943,30 @@ public class SolutionController {
                 solutionService.findSolutionsByCourseIdGroupByTask(principal, courseId, sortBy,false)
         );
     }
+//
+//    @GetMapping("/user/{userId}")
+//    public ResponseEntity<List<SolutionsGroupByCourseShortResponseDto>> findSolutionsByUserIdGroupByCourse(
+//        @AuthenticationPrincipal User principal,
+//        @PathVariable UUID userId,
+//        @Parameter(
+//                description = "Поле для сортировки",
+//                schema = @Schema(allowableValues = {"COURSE_NAME"})
+//        )
+//        @RequestParam(value = "sort_by", required = false) SortBy sortBy
+//    ) {
+//        User other = userService.findById(userId)
+//                .orElseThrow(() -> new EntityNotFoundEx(
+//                        "Такого пользователя не существует",
+//                        String.format("Ошибка поиска решений по id пользователя пользователем %s." +
+//                                " Пользователя %s не существует", principal.getId(), userId)
+//                ));
+//
+//        checkPrincipalHasAccessToOtherOrElseThrow(principal, other, true, true );
+//
+//        return ResponseEntity.ok(
+//                solutionService.findSolutionsByUserIdGroupByCourse(principal, userId, sortBy)
+//        );
+//    }
 
     @Operation(
             summary = "Просмотр/скачивание файла с id fileId из решения с id solutionId",

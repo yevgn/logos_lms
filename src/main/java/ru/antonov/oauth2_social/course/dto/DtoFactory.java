@@ -3,8 +3,6 @@ package ru.antonov.oauth2_social.course.dto;
 import ru.antonov.oauth2_social.common.Content;
 import ru.antonov.oauth2_social.common.ContentFileResponseDto;
 import ru.antonov.oauth2_social.course.entity.*;
-import ru.antonov.oauth2_social.solution.dto.*;
-import ru.antonov.oauth2_social.task.entity.Task;
 import ru.antonov.oauth2_social.user.entity.User;
 
 import java.util.List;
@@ -24,14 +22,24 @@ public class DtoFactory {
                 .build();
     }
 
-    public static CourseShortResponseDto makeCourseShortResponseDto(Course course, User creator) {
-        return CourseShortResponseDto
+    public static CourseWithInstitutionAndCreatorShortResponseDto makeCourseWithInstitutionAndCreatorShortResponseDto(
+            Course course, User creator
+    ) {
+        return CourseWithInstitutionAndCreatorShortResponseDto
                 .builder()
                 .id(course.getId())
                 .createdAt(course.getCreatedAt())
                 .name(course.getName())
                 .institution(ru.antonov.oauth2_social.user.dto.DtoFactory.makeInstitutionShortResponseDto(course.getInstitution()))
                 .creator(creator == null ? null : ru.antonov.oauth2_social.user.dto.DtoFactory.makeUserShortResponseDto(creator))
+                .build();
+    }
+
+    public static CourseShortResponseDto makeCourseShortResponseDto(Course course) {
+        return CourseShortResponseDto
+                .builder()
+                .id(course.getId())
+                .name(course.getName())
                 .build();
     }
 

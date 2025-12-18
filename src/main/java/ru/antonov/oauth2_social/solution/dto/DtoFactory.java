@@ -1,9 +1,9 @@
 package ru.antonov.oauth2_social.solution.dto;
 
+import ru.antonov.oauth2_social.course.entity.Course;
 import ru.antonov.oauth2_social.solution.entity.Solution;
 import ru.antonov.oauth2_social.solution.entity.SolutionComment;
 import ru.antonov.oauth2_social.task.entity.Task;
-import ru.antonov.oauth2_social.user.entity.User;
 
 import java.util.List;
 
@@ -36,6 +36,16 @@ public class DtoFactory {
                 .submittedAt(solution.getSubmittedAt())
                 .mark(solution.getMark())
                 .reviewedAt(solution.getReviewedAt())
+                .build();
+    }
+
+    public static SolutionsGroupByCourseShortResponseDto makeSolutionsGroupByCourseShortResponseDto(
+            Course course, List<SolutionWithTaskShortResponseDto> solutionsWithTaskDtoList
+    ){
+        return SolutionsGroupByCourseShortResponseDto
+                .builder()
+                .course(ru.antonov.oauth2_social.course.dto.DtoFactory.makeCourseShortResponseDto(course))
+                .solutions(solutionsWithTaskDtoList)
                 .build();
     }
 

@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL} #jdbc:postgresql://localhost:5432/logos #${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME} #postgres # ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD} #root #${SPRING_DATASOURCE_PASSWORD} #root
+    url: jdbc:postgresql://localhost:5432/logos  #${SPRING_DATASOURCE_URL}
+    username: postgres # ${SPRING_DATASOURCE_USERNAME}
+    password: root # ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -47,7 +47,7 @@ spring:
         max-comment-amount-for-solution: 20
         max-comment-amount-for-task: 20
     file-storage:
-      base-path: /var/lib/logos-lms/courses #D:/logos-lms/courses #/var/lib/logos-lms/courses
+      base-path: D:/logos-lms/courses #/var/lib/logos-lms/courses
 
   servlet:
     multipart:

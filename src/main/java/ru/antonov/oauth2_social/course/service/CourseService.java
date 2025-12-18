@@ -534,7 +534,7 @@ public class CourseService {
                 .toList();
     }
 
-    public List<CourseShortResponseDto> findCoursesByUserId(User principal, UUID userId, Boolean isCreator) {
+    public List<CourseWithInstitutionAndCreatorShortResponseDto> findCoursesByUserId(User principal, UUID userId, Boolean isCreator) {
         List<Course> courses = List.of();
 
         if(isCreator != null){
@@ -544,7 +544,7 @@ public class CourseService {
         }
 
         return courses.stream()
-                .map(c -> DtoFactory.makeCourseShortResponseDto(
+                .map(c -> DtoFactory.makeCourseWithInstitutionAndCreatorShortResponseDto(
                                 c, courseUserRepository.findCourseCreatorByCourseId(c.getId()).orElse(null)
                         )
                 )

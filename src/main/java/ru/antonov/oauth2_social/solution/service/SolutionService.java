@@ -39,7 +39,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -284,7 +283,7 @@ public class SolutionService {
 
             try {
                 fileService.uploadFiles(filesToWriteList);
-            } catch (IllegalArgumentException ex){
+            } catch (IllegalArgumentException ex) {
                 throw new EmptyFileEx(
                         "Ошибка. Вы пытаетесь загрузить пустой файл",
                         String.format("Ошибка при обновлении решения %s. Пользователь %s пытается " +
@@ -440,7 +439,7 @@ public class SolutionService {
 
         Stream<SolutionWithUserShortResponseDto> resStream = task.getSolutions()
                 .stream()
-               // .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+                // .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
                 .map(DtoFactory::makeSolutionWithUserShortResponseDto);
 
         if (sortBy == SortBy.USER) {
@@ -506,7 +505,7 @@ public class SolutionService {
         List<Solution> solutions = solutionRepository.findAllByCourseIdAndUserId(courseId, userId);
 
         Stream<SolutionWithTaskShortResponseDto> resStream = solutions.stream()
-               // .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+                // .filter(s -> s.getStatus() != SolutionStatus.REVOKED)
                 .map(DtoFactory::makeSolutionWithTaskShortResponseDto);
 
         if (sortBy == SortBy.TASK_PUBLISHED_AT) {
@@ -572,6 +571,7 @@ public class SolutionService {
 
         Stream<SolutionsGroupByTaskShortResponseDto> resStream = solutions.stream()
                 //.filter(s -> s.getStatus() != SolutionStatus.REVOKED)
+                .sorted(Comparator.comparing(Solution::getSubmittedAt, LocalDateTime::compareTo))
                 .collect(Collectors.groupingBy(Solution::getTask))
                 .entrySet()
                 .stream()
@@ -589,6 +589,7 @@ public class SolutionService {
         return resStream.toList();
     }
 
+    // сортировка solutions по submittedAt
     public List<SolutionsGroupByTaskShortResponseDto> findSolutionsByCourseIdGroupByTask(
             User principal, UUID courseId, SortBy sortBy, boolean isNeedUnreviewed
     ) {
@@ -605,6 +606,7 @@ public class SolutionService {
                             }
                         }
                 )
+                .sorted(Comparator.comparing(Solution::getSubmittedAt, LocalDateTime::compareTo))
                 .collect(Collectors.groupingBy(Solution::getTask))
                 .entrySet()
                 .stream()
@@ -646,5 +648,36 @@ public class SolutionService {
         return contentType;
     }
 
-
+//    public List<SolutionsGroupByCourseShortResponseDto> findSolutionsByUserIdGroupByCourse(
+//            User principal, UUID userId, SortBy sortBy) {
+//        List<Solution> solutions = solutionRepository.findAllByCourseId(courseId);
+//
+//        Stream<SolutionsGroupByTaskShortResponseDto> resStream = solutions.stream()
+//                .filter(s -> {
+//                            if (isNeedUnreviewed) {
+//                                return s.getStatus() == SolutionStatus.SUBMITTED ||
+//                                        s.getStatus() == SolutionStatus.SUBMITTED_LATE;
+//                            } else {
+//                                return s.getStatus() == SolutionStatus.ACCEPTED ||
+//                                        s.getStatus() == SolutionStatus.RETURNED;
+//                            }
+//                        }
+//                )
+//                .sorted(Comparator.comparing(Solution::getSubmittedAt, LocalDateTime::compareTo))
+//                .collect(Collectors.groupingBy(Solution::getTask))
+//                .entrySet()
+//                .stream()
+//                .map(e -> DtoFactory.makeSolutionsGroupByTaskShortResponseDto(e.getKey(), e.getValue()));
+//
+//        if (sortBy == SortBy.TASK_PUBLISHED_AT) {
+//            resStream = resStream.sorted(
+//                    Comparator.comparing(
+//                            dto -> dto.getTask().getPublishedAt(),
+//                            LocalDateTime::compareTo
+//                    )
+//            );
+//        }
+//
+//        return resStream.toList();
+//    }
 }

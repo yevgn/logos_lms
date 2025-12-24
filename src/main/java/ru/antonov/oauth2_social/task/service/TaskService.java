@@ -63,6 +63,7 @@ public class TaskService {
 
     @Transactional(rollbackFor = Exception.class)
     public TaskResponseDto saveTask(User principal, UUID courseId, TaskCreateRequestDto request) {
+        // Проверка лимита заданий для курса
         if(courseLimitCounter.isTaskAmountForCourseExceedsLimit(courseId, 1)){
             throw new TaskAmountForCourseExceedsLimitEx(
                     String.format("Ошибка создания задания. Превышено максимальное количество заданий для одного" +
@@ -81,8 +82,10 @@ public class TaskService {
                                 "Курса с id %s не существует", principal.getId(), courseId)
                 ));
 
+        // files - файлы, загружаемые вместе с заданием
         List<MultipartFile> files = request.getContent() == null ? List.of() : request.getContent();
 
+        // проверка лимита на число файлов для курса
         if (courseLimitCounter.isTaskAndMaterialFileAmountForCourseExceedsLimit(course.getId(), files.size())) {
             throw new TaskAndCourseMaterialFileLimitForCourseExceededEx(
                     "Ошибка при загрузке файлов. Превышено максимально допустимое число учебных " +
@@ -92,6 +95,7 @@ public class TaskService {
             );
         }
 
+        // генерация id для задания
         UUID taskId = UUID.randomUUID();
 
         List<FileService.FileInfo> contentInfoList = files.stream()
@@ -130,11 +134,13 @@ public class TaskService {
 
         List<User> targetUsers = List.of();
 
+        // создание необходимых директорий для локального хранения файлов задания
         Path taskCataloguePath = Paths.get(basePath, course.getId().toString(), "tasks", task.getId().toString());
         fileService.createDirectory(taskCataloguePath);
         Path solutionsCataloguePath = taskCataloguePath.resolve("solutions");
         fileService.createDirectory(solutionsCataloguePath);
 
+        // если задание индивидуальное, то оно будет доступно лишь для определенного круга участников курса
         if (!request.isForEveryone()) {
             List<User> targetUsersInCourse = courseService
                     .findAllUsersByCourseIdAndUserIdIn(courseId, request.getTargetUsersIdList())
@@ -162,6 +168,7 @@ public class TaskService {
                     .toList();
         }
 
+        // сохранение нового задания в БД
         try {
             taskRepository.saveAndFlush(task);
         } catch (DataIntegrityViolationException ex) {
@@ -182,8 +189,10 @@ public class TaskService {
             throw new DBConstraintViolationEx(message, debugMessage);
         }
 
+        // загрузка файлов на сервер
         fileService.uploadFiles(contentInfoList);
 
+        // рассылка уведомлений о появлении нового задания
         targetUsers.forEach(u -> taskEmailService.sendTaskUploadedNotification(u, task));
 
         return ru.antonov.oauth2_social.task.dto.DtoFactory.makeTaskResponseDto(task, targetUsers);

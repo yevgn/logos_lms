@@ -22,11 +22,14 @@ public class TwoFactorAuthenticationService {
     @Value("${spring.application.name}")
     private String issuer;
 
+    // Метод, генерирующий 2FA secret
     public String generateNewSecret() {
         return new DefaultSecretGenerator().generate();
     }
 
+    // Метод, генерирующий QR-код для отображения секрета в браузере
     public String generateQrCodeImageUri(String secret, String userEmail) {
+        // используется алгоритм хэширования HMAC-SHA1
         QrData data = new QrData.Builder()
                 .label(issuer + ":" + userEmail)
                 .secret(secret)
@@ -51,6 +54,7 @@ public class TwoFactorAuthenticationService {
         return Utils.getDataUriForImage(imageData, generator.getImageMimeType());
     }
 
+    // Проверка соответствия 2FA кода 2FA секрету
     public boolean isOtpValid(String secret, String code) {
         TimeProvider timeProvider = new SystemTimeProvider();
         CodeGenerator codeGenerator = new DefaultCodeGenerator();

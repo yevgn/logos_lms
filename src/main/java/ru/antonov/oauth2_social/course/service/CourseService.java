@@ -110,11 +110,16 @@ public class CourseService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public CourseResponseDto save(CourseCreateWithUserIdListRequestDto request, User principal) {
-        if(courseLimitCounter.isCourseAmountForInstitutionExceedsLimit(principal.getInstitution().getId(), 1)){
+    public CourseResponseDto save(
+            CourseCreateWithUserIdListRequestDto request, User principal
+    ) {
+
+        if(courseLimitCounter.isCourseAmountForInstitutionExceedsLimit(
+                principal.getInstitution().getId(), 1)
+        ){
             throw new CourseAmountForInstitutionExceedsLimitEx(
-                    String.format("Ошибка создания курса. Превышено максимальное количество курсов для одного" +
-                            " учебного заведения - %s", maxCourseAmountForInstitution),
+                    String.format("Ошибка создания курса. Превышено максимальное количество" +
+                            " курсов для одного учебного заведения - %s", maxCourseAmountForInstitution),
                     String.format("Ошибка при создании курса пользователем %s. Превышено максимальное количество курсов" +
                             " для одного учебного заведения - %s", principal.getId(), maxCourseAmountForInstitution)
             );
@@ -133,7 +138,9 @@ public class CourseService {
         }
 
         users.forEach(u ->
-                checkUserHasAccessToOtherOrElseThrow(creator, u, false, true)
+                checkUserHasAccessToOtherOrElseThrow(
+                        creator, u, false, true
+                )
         );
 
         String code = generateCourseCode();
@@ -152,7 +159,9 @@ public class CourseService {
                 .filter(cu -> !cu.isCreator())
                 .map(CourseUser::getUser).toList();
 
-        usersExcludeCreator.forEach(u -> courseEmailService.sendCourseJoinNotification(u, course));
+        usersExcludeCreator.forEach(
+                u -> courseEmailService.sendCourseJoinNotification(u, course)
+        );
 
         return DtoFactory.makeCourseResponseDto(
                 course,

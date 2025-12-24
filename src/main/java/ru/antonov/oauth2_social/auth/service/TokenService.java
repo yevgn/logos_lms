@@ -15,7 +15,6 @@ import ru.antonov.oauth2_social.auth.entity.TokenType;
 import ru.antonov.oauth2_social.user.entity.User;
 import ru.antonov.oauth2_social.auth.repository.TokenRepository;
 
-
 @Service
 @RequiredArgsConstructor
 @Slf4j

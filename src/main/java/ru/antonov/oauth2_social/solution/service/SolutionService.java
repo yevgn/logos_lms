@@ -70,9 +70,11 @@ public class SolutionService {
                                 "Задания с id %s не существует", principal.getId(), taskId)
                 ));
 
+        // files - файлы, прикрепленные вместе с решением
         List<MultipartFile> files = request.getContent();
         UUID courseId = task.getCourse().getId();
 
+        // проверка лимита файлов для курса
         if (courseLimitCounter.isSolutionFileAmountForCourseExceedsLimit(courseId, files.size())) {
             throw new SolutionFileLimitForCourseExceededEx(
                     "Ошибка при загрузке файлов. Превышено максимально допустимое число файлов с решениями " +
@@ -83,6 +85,7 @@ public class SolutionService {
             );
         }
 
+        // генерация id решения
         UUID solutionId = UUID.randomUUID();
 
         List<FileService.FileInfo> contentInfoList = files.stream()
@@ -115,6 +118,7 @@ public class SolutionService {
                 .status(calculateSolutionStatus(task))
                 .build();
 
+        // сохранение решения в БД
         try {
             solutionRepository.saveAndFlush(solution);
         } catch (DataIntegrityViolationException ex) {
@@ -134,13 +138,14 @@ public class SolutionService {
             throw new DBConstraintViolationEx(message, debugMessage);
         }
 
+        // создание необходимых директорий на сервере для хранения файлов решения
         Path solutionCataloguePath = Paths.get(
                 basePath, task.getCourse().getId().toString(), "tasks", task.getId().toString(), "solutions",
                 solutionId.toString()
         );
-
         fileService.createDirectory(solutionCataloguePath);
 
+        // загрузка файлов на сервер
         fileService.uploadFiles(contentInfoList);
 
         return DtoFactory.makeSolutionResponseDto(solution);
